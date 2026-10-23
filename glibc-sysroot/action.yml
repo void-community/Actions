@@ -58,9 +58,9 @@ runs:
           # against it needs glibc 2.17 on arm64 and 2.16 on x64. The images only run on x64 hosts, so the rootfs is copied out of a created
           # container instead of building inside it, which works on arm64 runners too.
           if [ "$arch" = x64 ]; then
-            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64@sha256:825fdca697eabeb0404e07a9d2c08edf2f89dfb39d161efb002fca7ca7484de2"
+            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64@sha256:c7566e15d7265673e414b7db7a199be0da2178b96ef7ed8b553ee698ff7e2a84"
           else
-            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64@sha256:41bb007ad2c28b3a058bc0e5e706466a66460f563eebb60db9f9c445b09d3e73"
+            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64@sha256:b3581941f7fdcff15c8c1235d4017921b6348c0fb92daff73afa334dd5102eb3"
           fi
           sysroot="/crossrootfs/$arch"
           container="$(docker create --platform linux/amd64 "$image" /bin/true)"
