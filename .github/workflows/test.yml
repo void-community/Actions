@@ -11,16 +11,19 @@ permissions:
 
 jobs:
   glibc-sysroot:
-    name: glibc-sysroot (${{ matrix.rid }} on ${{ matrix.runner }})
+    name: glibc-sysroot (${{ matrix.rid }}, glibc ${{ matrix.glibc }}, on ${{ matrix.runner }})
     strategy:
       fail-fast: false
       matrix:
         include:
           # Each target from a runner of its own architecture and from the other one, which needs llvm-objcopy.
-          - { rid: linux-x64, runner: ubuntu-24.04, triple: x86_64-linux-gnu }
-          - { rid: linux-x64, runner: ubuntu-24.04-arm, triple: x86_64-linux-gnu }
-          - { rid: linux-arm64, runner: ubuntu-24.04-arm, triple: aarch64-linux-gnu }
-          - { rid: linux-arm64, runner: ubuntu-24.04, triple: aarch64-linux-gnu }
+          - { rid: linux-x64, glibc: '2.17', runner: ubuntu-24.04, triple: x86_64-linux-gnu }
+          - { rid: linux-x64, glibc: '2.17', runner: ubuntu-24.04-arm, triple: x86_64-linux-gnu }
+          - { rid: linux-arm64, glibc: '2.17', runner: ubuntu-24.04-arm, triple: aarch64-linux-gnu }
+          - { rid: linux-arm64, glibc: '2.17', runner: ubuntu-24.04, triple: aarch64-linux-gnu }
+          # The glibc 2.12 probe also runs in CentOS 6 where the runner is x64.
+          - { rid: linux-x64, glibc: '2.12', runner: ubuntu-24.04, triple: x86_64-linux-gnu, image: 'centos:6@sha256:a93df2e96e07f56ea48f215425c6f1673ab922927894595bb5c0ee4c5a955133' }
+          - { rid: linux-x64, glibc: '2.12', runner: ubuntu-24.04-arm, triple: x86_64-linux-gnu }
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -28,33 +31,61 @@ jobs:
         uses: ./glibc-sysroot
         with:
           rid: ${{ matrix.rid }}
-      # A library that calls the functions a NativeAOT runtime takes from glibc (threads and the dynamic loader) is linked against the sysroot,
-      # and must ask for no glibc newer than 2.17, which is what the sysroot promises.
+          glibc: ${{ matrix.glibc }}
+      # A library that calls the functions a NativeAOT runtime takes from glibc (threads, the dynamic loader and aligned_alloc) is linked against
+      # the sysroot, must ask for no glibc newer than the one the sysroot promises, and must bind every symbol it takes from glibc to a version.
       - name: Link against the sysroot and check the glibc floor
         env:
           SYSROOT: ${{ steps.sysroot.outputs.sysroot }}
           PROPERTIES: ${{ steps.sysroot.outputs.properties }}
           TRIPLE: ${{ matrix.triple }}
+          GLIBC: ${{ matrix.glibc }}
         run: |
-          grep -q 'VERSION="18.04' "$SYSROOT/etc/os-release"
+          if [ "$GLIBC" = 2.17 ]; then
+            grep -q 'VERSION="18.04' "$SYSROOT/etc/os-release"
+          else
+            grep -q '__GLIBC_MINOR__	12' "$SYSROOT/usr/include/features.h"
+          fi
           case "$PROPERTIES" in *"-p:SysRoot=$SYSROOT -p:LinkerFlavor=lld"*) ;; *) echo "::error::Unexpected properties: $PROPERTIES"; exit 1 ;; esac
           cat > probe.c <<'SOURCE'
           #include <dlfcn.h>
           #include <pthread.h>
+          #include <stdint.h>
+          #include <stdlib.h>
+          void *aligned_alloc(size_t alignment, size_t size);
           static void *run(void *argument) { return argument; }
           int probe(void) {
               pthread_t thread;
               pthread_attr_t attributes;
+              void *memory = aligned_alloc(64, 256);
+              if (memory == 0 || ((uintptr_t)memory & 63) != 0) return 2;
+              free(memory);
               pthread_attr_init(&attributes);
               if (pthread_create(&thread, &attributes, run, 0) != 0) return 1;
               pthread_join(thread, 0);
               return dlopen("libm.so.6", RTLD_NOW) == 0;
           }
           SOURCE
+          cat > main.c <<'SOURCE'
+          #include <stdio.h>
+          int probe(void);
+          int main(void) { int result = probe(); printf("probe returned %d\n", result); return result; }
+          SOURCE
           clang --target="$TRIPLE" --sysroot="$SYSROOT" -fuse-ld=lld -shared -fPIC -pthread probe.c -o libprobe.so -ldl
+          clang --target="$TRIPLE" --sysroot="$SYSROOT" -fuse-ld=lld main.c -o probe -L. -lprobe -Wl,-rpath,'$ORIGIN'
           newest="$(readelf -V libprobe.so | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1)"
           echo "libprobe.so asks for glibc $newest"
-          if [ "$(printf '%s\n2.17\n' "$newest" | sort -V | tail -1)" != "2.17" ]; then
-            echo "::error::The library asks for glibc $newest, newer than 2.17."
+          if [ "$(printf '%s\n%s\n' "$newest" "$GLIBC" | sort -V | tail -1)" != "$GLIBC" ]; then
+            echo "::error::The library asks for glibc $newest, newer than $GLIBC."
             exit 1
           fi
+          unbound="$(readelf --dyn-syms -W libprobe.so | awk '$5 == "GLOBAL" && $7 == "UND" && $8 !~ /@/ && $8 != "" {print $8}')"
+          if [ -n "$unbound" ]; then
+            echo "::error::libprobe.so needs symbols that the sysroot did not bind to a glibc version: $unbound"
+            exit 1
+          fi
+      - name: Run the probe on the old glibc
+        if: matrix.image
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: docker run --rm -v "$PWD:/probe:ro" "$IMAGE" /probe/probe

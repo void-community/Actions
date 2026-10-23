@@ -1,14 +1,21 @@
 name: glibc sysroot
 description: >-
-  Prepares the Ubuntu 18.04 sysroot of .NET's cross-build image, so that dotnet publish links a NativeAOT library (a JvmBridge agent, for example) for linux-x64 or linux-arm64 against
-  glibc 2.17 instead of the runner's glibc. Pass the properties output to dotnet publish. Runs on Linux runners of either architecture that have Docker.
+  Prepares a sysroot with an old glibc, so that dotnet publish links a NativeAOT library (a JvmBridge agent, for example) for linux-x64 or linux-arm64
+  against glibc 2.17, or for linux-x64 against glibc 2.12, instead of the runner's glibc. Pass the properties output to dotnet publish. Runs on Linux
+  runners of either architecture.
 inputs:
   rid:
     description: The runtime identifier to publish, linux-x64 or linux-arm64.
     required: true
+  glibc:
+    description: >-
+      The oldest glibc the library is to load on: 2.17 (the default) from the Ubuntu 18.04 root file system of .NET's cross-build image, or, for
+      linux-x64 only, 2.12 from CentOS 6.10 packages.
+    required: false
+    default: '2.17'
 outputs:
   sysroot:
-    description: The sysroot directory, /crossrootfs/x64 or /crossrootfs/arm64.
+    description: The sysroot directory, /crossrootfs/x64 or /crossrootfs/arm64 for glibc 2.17, /crossrootfs/x64-glibc-2.12 for glibc 2.12.
     value: ${{ steps.sysroot.outputs.sysroot }}
   properties:
     description: The MSBuild properties that make dotnet publish link against the sysroot, for example -p:SysRoot=/crossrootfs/x64 -p:LinkerFlavor=lld.
@@ -20,20 +27,24 @@ runs:
       shell: bash
       env:
         RID: ${{ inputs.rid }}
+        GLIBC: ${{ inputs.glibc }}
       run: |
-        # The images are the ones .NET 10 builds its own Linux binaries in; their rootfs is Ubuntu 18.04 with glibc 2.27, and an agent linked
-        # against it needs glibc 2.17 on arm64 and 2.16 on x64. The images only run on x64 hosts, so the rootfs is copied out of a created
-        # container instead of building inside it, which works on arm64 runners too.
-        case "$RID" in
-          linux-x64)
+        case "$RID:$GLIBC" in
+          linux-x64:2.17|linux-x64:2.12)
             arch=x64
             machine=x86_64
-            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64@sha256:825fdca697eabeb0404e07a9d2c08edf2f89dfb39d161efb002fca7ca7484de2"
             ;;
-          linux-arm64)
+          linux-arm64:2.17)
             arch=arm64
             machine=aarch64
-            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64@sha256:41bb007ad2c28b3a058bc0e5e706466a66460f563eebb60db9f9c445b09d3e73"
+            ;;
+          linux-arm64:*)
+            echo "::error::linux-arm64 has no glibc older than 2.17, where glibc's arm64 port starts."
+            exit 1
+            ;;
+          linux-x64:*)
+            echo "::error::The glibc sysroot is for glibc 2.17 or 2.12, not $GLIBC."
+            exit 1
             ;;
           *)
             echo "::error::The glibc sysroot is for linux-x64 and linux-arm64, not $RID."
@@ -42,15 +53,51 @@ runs:
         esac
         sudo apt-get update -qq
         sudo apt-get install -y -qq clang lld llvm > /dev/null
-        container="$(docker create --platform linux/amd64 "$image" /bin/true)"
-        sudo mkdir -p /crossrootfs
-        # The rootfs links lib to /crossrootfs/<arch>/usr/lib, so it must sit at that path.
-        sudo docker cp "$container:/crossrootfs/$arch" /crossrootfs/
-        docker rm "$container" > /dev/null
-        properties="-p:SysRoot=/crossrootfs/$arch -p:LinkerFlavor=lld"
+        if [ "$GLIBC" = 2.17 ]; then
+          # The images are the ones .NET 10 builds its own Linux binaries in; their rootfs is Ubuntu 18.04 with glibc 2.27, and an agent linked
+          # against it needs glibc 2.17 on arm64 and 2.16 on x64. The images only run on x64 hosts, so the rootfs is copied out of a created
+          # container instead of building inside it, which works on arm64 runners too.
+          if [ "$arch" = x64 ]; then
+            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64@sha256:825fdca697eabeb0404e07a9d2c08edf2f89dfb39d161efb002fca7ca7484de2"
+          else
+            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64@sha256:41bb007ad2c28b3a058bc0e5e706466a66460f563eebb60db9f9c445b09d3e73"
+          fi
+          sysroot="/crossrootfs/$arch"
+          container="$(docker create --platform linux/amd64 "$image" /bin/true)"
+          sudo mkdir -p /crossrootfs
+          # The rootfs links lib to /crossrootfs/<arch>/usr/lib, so it must sit at that path.
+          sudo docker cp "$container:/crossrootfs/$arch" /crossrootfs/
+          docker rm "$container" > /dev/null
+        else
+          # No image .NET publishes is that old, so the sysroot is unpacked from the last CentOS 6 packages, pinned by checksum: glibc and its
+          # headers, the kernel headers, and gcc's start files and libgcc. Their absolute links are made relative, so they resolve inside the
+          # sysroot. glibc 2.12 lacks aligned_alloc (2.16), which the .NET runtime calls, so the sysroot's libc_nonshared.a, which every link
+          # against this glibc pulls in, gets a hidden copy built on posix_memalign.
+          sudo apt-get install -y -qq rpm2cpio cpio > /dev/null
+          sysroot=/crossrootfs/x64-glibc-2.12
+          packages="$RUNNER_TEMP/centos-6.10"
+          mkdir -p "$packages"
+          sudo mkdir -p "$sysroot"
+          while read -r sha256 package; do
+            curl -fsSL --retry 5 -o "$packages/$package.rpm" "https://vault.centos.org/6.10/os/x86_64/Packages/$package.rpm"
+            echo "$sha256  $packages/$package.rpm" | sha256sum -c --quiet
+            (cd "$sysroot" && rpm2cpio "$packages/$package.rpm" | sudo cpio -idmu --quiet)
+          done <<'PACKAGES'
+        b893707c0dc87a556274feb53c544515a1d3b0fe2743c454dece682f5b7d5719 glibc-2.12-1.212.el6.x86_64
+        65b97f1f868afc090b1beec846490d1e6974751f188fd42b1ebc59d1c2866549 glibc-devel-2.12-1.212.el6.x86_64
+        7f1f3a2cf562465f2c18031e4e76734987ea8489c1202301e019dfb722ff5031 glibc-headers-2.12-1.212.el6.x86_64
+        93b20d547637e3d25a9604b8034334afa910f61898da0f265a3969a68bf8cc6d kernel-headers-2.6.32-754.el6.x86_64
+        e21940ae5910d19e930217e6cc13a91c664c342c27efc045d76ca02792689cfa gcc-4.4.7-23.el6.x86_64
+        5e32d14ebe08101d07aaedacd5a04c8bd911d15b1a368e54fcb8241a1f5aeecb libgcc-4.4.7-23.el6.x86_64
+        PACKAGES
+          sudo python3 -I "$GITHUB_ACTION_PATH/relative-links.py" "$sysroot"
+          clang --target=x86_64-linux-gnu --sysroot="$sysroot" -fPIC -O2 -c "$GITHUB_ACTION_PATH/aligned_alloc.c" -o "$packages/aligned_alloc.o"
+          sudo llvm-ar rs "$sysroot/usr/lib64/libc_nonshared.a" "$packages/aligned_alloc.o"
+        fi
+        properties="-p:SysRoot=$sysroot -p:LinkerFlavor=lld"
         # Linking for another architecture than the runner's needs an objcopy that reads that architecture.
         if [ "$(uname -m)" != "$machine" ]; then
           properties="$properties -p:ObjCopyName=llvm-objcopy"
         fi
-        echo "sysroot=/crossrootfs/$arch" >> "$GITHUB_OUTPUT"
+        echo "sysroot=$sysroot" >> "$GITHUB_OUTPUT"
         echo "properties=$properties" >> "$GITHUB_OUTPUT"
