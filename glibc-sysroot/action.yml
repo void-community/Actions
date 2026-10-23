@@ -33,7 +33,7 @@ runs:
           linux-arm64)
             arch=arm64
             machine=aarch64
-            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64@sha256:41bb007ad2c28b3a058bc0e5e706466a66460f563eebb60db9f9c445b09d3e73"
+            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64@sha256:b3581941f7fdcff15c8c1235d4017921b6348c0fb92daff73afa334dd5102eb3"
             ;;
           *)
             echo "::error::The glibc sysroot is for linux-x64 and linux-arm64, not $RID."
