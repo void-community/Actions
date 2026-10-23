@@ -28,7 +28,7 @@ runs:
           linux-x64)
             arch=x64
             machine=x86_64
-            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64@sha256:825fdca697eabeb0404e07a9d2c08edf2f89dfb39d161efb002fca7ca7484de2"
+            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64@sha256:c7566e15d7265673e414b7db7a199be0da2178b96ef7ed8b553ee698ff7e2a84"
             ;;
           linux-arm64)
             arch=arm64
