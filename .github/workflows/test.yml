@@ -1,0 +1,60 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  glibc-sysroot:
+    name: glibc-sysroot (${{ matrix.rid }} on ${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Each target from a runner of its own architecture and from the other one, which needs llvm-objcopy.
+          - { rid: linux-x64, runner: ubuntu-24.04, triple: x86_64-linux-gnu }
+          - { rid: linux-x64, runner: ubuntu-24.04-arm, triple: x86_64-linux-gnu }
+          - { rid: linux-arm64, runner: ubuntu-24.04-arm, triple: aarch64-linux-gnu }
+          - { rid: linux-arm64, runner: ubuntu-24.04, triple: aarch64-linux-gnu }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - id: sysroot
+        uses: ./glibc-sysroot
+        with:
+          rid: ${{ matrix.rid }}
+      # A library that calls the functions a NativeAOT runtime takes from glibc (threads and the dynamic loader) is linked against the sysroot,
+      # and must ask for no glibc newer than 2.17, which is what the sysroot promises.
+      - name: Link against the sysroot and check the glibc floor
+        env:
+          SYSROOT: ${{ steps.sysroot.outputs.sysroot }}
+          PROPERTIES: ${{ steps.sysroot.outputs.properties }}
+          TRIPLE: ${{ matrix.triple }}
+        run: |
+          grep -q 'VERSION="18.04' "$SYSROOT/etc/os-release"
+          case "$PROPERTIES" in *"-p:SysRoot=$SYSROOT -p:LinkerFlavor=lld"*) ;; *) echo "::error::Unexpected properties: $PROPERTIES"; exit 1 ;; esac
+          cat > probe.c <<'SOURCE'
+          #include <dlfcn.h>
+          #include <pthread.h>
+          static void *run(void *argument) { return argument; }
+          int probe(void) {
+              pthread_t thread;
+              pthread_attr_t attributes;
+              pthread_attr_init(&attributes);
+              if (pthread_create(&thread, &attributes, run, 0) != 0) return 1;
+              pthread_join(thread, 0);
+              return dlopen("libm.so.6", RTLD_NOW) == 0;
+          }
+          SOURCE
+          clang --target="$TRIPLE" --sysroot="$SYSROOT" -fuse-ld=lld -shared -fPIC -pthread probe.c -o libprobe.so -ldl
+          newest="$(readelf -V libprobe.so | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1)"
+          echo "libprobe.so asks for glibc $newest"
+          if [ "$(printf '%s\n2.17\n' "$newest" | sort -V | tail -1)" != "2.17" ]; then
+            echo "::error::The library asks for glibc $newest, newer than 2.17."
+            exit 1
+          fi

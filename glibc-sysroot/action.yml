@@ -1,0 +1,56 @@
+name: glibc sysroot
+description: >-
+  Prepares the Ubuntu 18.04 sysroot of .NET's cross-build image, so that dotnet publish links a NativeAOT library (a JvmBridge agent, for example) for linux-x64 or linux-arm64 against
+  glibc 2.17 instead of the runner's glibc. Pass the properties output to dotnet publish. Runs on Linux runners of either architecture that have Docker.
+inputs:
+  rid:
+    description: The runtime identifier to publish, linux-x64 or linux-arm64.
+    required: true
+outputs:
+  sysroot:
+    description: The sysroot directory, /crossrootfs/x64 or /crossrootfs/arm64.
+    value: ${{ steps.sysroot.outputs.sysroot }}
+  properties:
+    description: The MSBuild properties that make dotnet publish link against the sysroot, for example -p:SysRoot=/crossrootfs/x64 -p:LinkerFlavor=lld.
+    value: ${{ steps.sysroot.outputs.properties }}
+runs:
+  using: composite
+  steps:
+    - id: sysroot
+      shell: bash
+      env:
+        RID: ${{ inputs.rid }}
+      run: |
+        # The images are the ones .NET 10 builds its own Linux binaries in; their rootfs is Ubuntu 18.04 with glibc 2.27, and an agent linked
+        # against it needs glibc 2.17 on arm64 and 2.16 on x64. The images only run on x64 hosts, so the rootfs is copied out of a created
+        # container instead of building inside it, which works on arm64 runners too.
+        case "$RID" in
+          linux-x64)
+            arch=x64
+            machine=x86_64
+            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64@sha256:825fdca697eabeb0404e07a9d2c08edf2f89dfb39d161efb002fca7ca7484de2"
+            ;;
+          linux-arm64)
+            arch=arm64
+            machine=aarch64
+            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64@sha256:41bb007ad2c28b3a058bc0e5e706466a66460f563eebb60db9f9c445b09d3e73"
+            ;;
+          *)
+            echo "::error::The glibc sysroot is for linux-x64 and linux-arm64, not $RID."
+            exit 1
+            ;;
+        esac
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq clang lld llvm > /dev/null
+        container="$(docker create --platform linux/amd64 "$image" /bin/true)"
+        sudo mkdir -p /crossrootfs
+        # The rootfs links lib to /crossrootfs/<arch>/usr/lib, so it must sit at that path.
+        sudo docker cp "$container:/crossrootfs/$arch" /crossrootfs/
+        docker rm "$container" > /dev/null
+        properties="-p:SysRoot=/crossrootfs/$arch -p:LinkerFlavor=lld"
+        # Linking for another architecture than the runner's needs an objcopy that reads that architecture.
+        if [ "$(uname -m)" != "$machine" ]; then
+          properties="$properties -p:ObjCopyName=llvm-objcopy"
+        fi
+        echo "sysroot=/crossrootfs/$arch" >> "$GITHUB_OUTPUT"
+        echo "properties=$properties" >> "$GITHUB_OUTPUT"
