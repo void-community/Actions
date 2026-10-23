@@ -1,9 +1,9 @@
 # Actions
 
-Reusable GitHub Actions for void-community projects. Pin them to a commit:
+Reusable GitHub Actions for void-community projects. There are no releases or tags: pin an action to a commit of `main` and name the branch in the comment, so that Renovate updates the pin when `main` moves:
 
 ```yaml
-uses: void-community/actions/<action>@<commit-sha> # v1.0.0
+uses: void-community/actions/<action>@<commit-sha> # main
 ```
 
 ## glibc-sysroot
@@ -14,7 +14,7 @@ Links a NativeAOT library for Linux against glibc 2.17 instead of the runner's g
 - name: Prepare the glibc 2.17 sysroot
   id: sysroot
   if: runner.os == 'Linux'
-  uses: void-community/actions/glibc-sysroot@<commit-sha> # v1.0.0
+  uses: void-community/actions/glibc-sysroot@<commit-sha> # main
   with:
     rid: ${{ matrix.rid }}   # linux-x64 or linux-arm64
 - run: dotnet publish MyAgent.csproj -c Release -r ${{ matrix.rid }} --self-contained ${{ steps.sysroot.outputs.properties }}

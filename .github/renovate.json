@@ -1,0 +1,20 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:best-practices"],
+  "dependencyDashboard": true,
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "packageRules": [
+    {"matchUpdateTypes": ["minor", "patch", "pin", "digest"], "automerge": true},
+    {"matchUpdateTypes": ["major"], "automerge": false}
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The cross-build images that glibc-sysroot copies its root file systems from, pinned by digest in its script.",
+      "managerFilePatterns": ["/(^|/)action\\.ya?ml$/"],
+      "matchStrings": ["image=\"(?<depName>[^:\"]+):(?<currentValue>[^@\"]+)@(?<currentDigest>sha256:[a-f0-9]+)\""],
+      "datasourceTemplate": "docker"
+    }
+  ]
+}
