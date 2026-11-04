@@ -58,7 +58,7 @@ runs:
           # against it needs glibc 2.17 on arm64 and 2.16 on x64. The images only run on x64 hosts, so the rootfs is copied out of a created
           # container instead of building inside it, which works on arm64 runners too.
           if [ "$arch" = x64 ]; then
-            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64@sha256:aa6c14a91ff0d5977d6c3bcd0b518a5181fbab80781326423a978eb85e963e8b"
+            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64@sha256:a99347c5b7a5c78f8c0642a69535e75315dba8c2909ddb567364e07dce6cd156"
           else
             image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64@sha256:fb2f58e348ffc52e03b8cc100f92a343fb79a9ec64b65c637c591215d0bf8120"
           fi
