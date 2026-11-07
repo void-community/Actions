@@ -60,7 +60,7 @@ runs:
           if [ "$arch" = x64 ]; then
             image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64@sha256:3d9b12839eb1352678e577c3fada879ea1e92fe5923da4d260786e7b6d7b0075"
           else
-            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64@sha256:10999af8059a25e190fab3bb7c3728a67ea0ffc7964a6e4a51eab24a98b67d33"
+            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64@sha256:15c15aac729f136bc69c32bdb2582324a226f19bcabf24cb4d283b1bacbc2ff9"
           fi
           sysroot="/crossrootfs/$arch"
           container="$(docker create --platform linux/amd64 "$image" /bin/true)"
