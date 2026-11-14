@@ -48,7 +48,7 @@ jobs:
 
   renovate:
     if: ${{ github.event_name == 'schedule' }}
-    uses: void-community/actions/.github/workflows/reusable-renovate.yml@v1
+    uses: void-community/actions/.github/workflows/maintenance-renovate.yml@v1
     secrets:
       RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
 ```
