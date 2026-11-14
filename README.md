@@ -28,7 +28,7 @@ permissions:
 jobs:
   dotnet:
     if: ${{ github.event_name != 'schedule' }}
-    uses: void-community/actions/.github/workflows/dotnet.yml@v1
+    uses: void-community/actions/.github/workflows/entrypoint-dotnet.yml@v1
     with:
       # Version scheme: release-please or timestamp
       version: timestamp

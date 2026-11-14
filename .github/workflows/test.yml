@@ -90,7 +90,7 @@ jobs:
           IMAGE: ${{ matrix.image }}
         run: docker run --rm -v "$PWD:/probe:ro" "$IMAGE" /probe/probe
   dotnet:
-    uses: $/.github/workflows/dotnet.yml
+    uses: $/.github/workflows/entrypoint-dotnet.yml
     with:
       version: timestamp
       pack: tests/fixture/Fixture
