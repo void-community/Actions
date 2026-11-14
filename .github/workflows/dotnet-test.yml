@@ -39,5 +39,10 @@ jobs:
       - name: Build
         run: dotnet build --configuration Release
 
+      # A build that rewrites sources, as NetAgents does, means the commit was not formatted
+      - name: Check formatting
+        if: ${{ runner.os == 'Linux' }}
+        run: git diff --exit-code
+
       - name: Run tests
         run: dotnet test --configuration Release --no-build
