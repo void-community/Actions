@@ -38,6 +38,8 @@ jobs:
       publish: src/MyApp/MyApp.csproj
       # GHCR repository the published project is pushed to
       container: my-owner/my-app
+      # Tag that follows the default branch once it passes
+      tag: v1
 
   nuget:
     needs: dotnet
@@ -48,7 +50,7 @@ jobs:
 
   renovate:
     if: ${{ github.event_name == 'schedule' }}
-    uses: void-community/actions/.github/workflows/maintenance-renovate.yml@v1
+    uses: void-community/actions/.github/workflows/entrypoint-renovate.yml@v1
     secrets:
       RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
 ```
@@ -63,6 +65,7 @@ A pull request builds and tests the solution in the repository root. A push to t
 | `pack` | The projects to pack and push to nuget.org, separated by spaces |
 | `publish` | The `.csproj` to publish as an executable for every runtime, uploaded on every run |
 | `container` | The GHCR repository to push `publish` to as `latest`, for example `my-owner/my-app` |
+| `tag` | A tag to move to the commit when the default branch passes, for a repository that others pin to that tag |
 
 What an input asks of the repository:
 
