@@ -26,9 +26,10 @@ permissions:
   pull-requests: write
 
 jobs:
-  dotnet:
-    if: ${{ github.event_name != 'schedule' }}
-    uses: void-community/actions/.github/workflows/entrypoint-dotnet.yml@main
+  entrypoint:
+    uses: void-community/actions/.github/workflows/entrypoint.yml@main
+    secrets:
+      RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
     with:
       # Version scheme: release-please or timestamp
       version: timestamp
@@ -40,17 +41,11 @@ jobs:
       container: my-owner/my-app
 
   nuget:
-    needs: dotnet
-    if: ${{ needs.dotnet.outputs.nuget == 'true' }}
+    needs: entrypoint
+    if: ${{ needs.entrypoint.outputs.nuget == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: void-community/actions/nuget-push@main
-
-  renovate:
-    if: ${{ github.event_name == 'schedule' }}
-    uses: void-community/actions/.github/workflows/entrypoint-renovate.yml@main
-    secrets:
-      RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
 ```
 
 A pull request builds and tests the solution in the repository root; a repository without one skips that. A push to the default branch also publishes. Renovate runs every hour. Every input is optional:
@@ -70,11 +65,11 @@ What an input asks of the repository:
 - `version: timestamp`: the build computes its version from the `VersionTimestamp` property.
 - `pack`: add a trusted publishing policy on nuget.org that names the repository and `ci.yml`. The packages are pushed when a release is created, or on every push to the default branch with `version: timestamp`.
 
-Require the `dotnet / required` check in branch protection.
+Require the `entrypoint / required` check in branch protection.
 
 ## Renovate
 
-The `renovate` job needs a `RENOVATE_TOKEN` secret in the repository or its organization. Delete the repository's own Renovate workflow and `renovate.json`, and keep a `renovate.json` only for rules of its own.
+Renovate needs a `RENOVATE_TOKEN` secret in the repository or its organization. Delete the repository's own Renovate workflow and `renovate.json`, and keep a `renovate.json` only for rules of its own.
 
 ## glibc-sysroot
 
