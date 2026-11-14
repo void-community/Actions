@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 * * * *"
+
+permissions:
+  packages: write
+  pages: write
+  id-token: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  dotnet:
+    if: ${{ github.event_name != 'schedule' }}
+    uses: $/.github/workflows/entrypoint-dotnet.yml
+
+  nuget:
+    needs: dotnet
+    if: ${{ needs.dotnet.outputs.nuget == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: void-community/actions/nuget-push@main
+
+  renovate:
+    if: ${{ github.event_name == 'schedule' }}
+    uses: void-community/actions/.github/workflows/entrypoint-renovate.yml@main
+    secrets:
+      RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
