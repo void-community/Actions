@@ -26,9 +26,9 @@ on:
         required: false
         default: ''
     outputs:
-      release:
-        description: "Release Created"
-        value: ${{ jobs.version.outputs.release }}
+      nuget:
+        description: "Packages To Push"
+        value: ${{ inputs.pack != '' && jobs.version.outputs.release == 'true' }}
 
 jobs:
   version:
