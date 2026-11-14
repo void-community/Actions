@@ -13,10 +13,10 @@ on:
         type: string
         required: false
         default: ''
-      project:
+      projects:
         type: string
         required: true
-      repository:
+      repositories:
         type: string
         required: true
 
@@ -26,7 +26,6 @@ jobs:
       Version: ${{ inputs.version }}
       VersionTimestamp: ${{ inputs.timestamp }}
       ContainerRegistry: ghcr.io
-      ContainerRepository: ${{ inputs.repository }}
       ContainerImageTags: latest-${{ matrix.tag }}
       ContainerBaseImage: ${{ matrix.base-image }}
     strategy:
@@ -85,29 +84,42 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libc6-dev:armhf libstdc++-13-dev:armhf gcc-arm-linux-gnueabihf
 
+      # The repositories pair with the projects by position
       - name: Publish Container
         if: ${{ !matrix.alpine }}
-        run: dotnet publish ${{ inputs.project }} --configuration Release -t:PublishContainer -p:RuntimeIdentifier=${{ matrix.runtime-identifier }}
+        shell: bash
+        run: |
+          projects=(${{ inputs.projects }})
+          repositories=(${{ inputs.repositories }})
+
+          for index in "${!repositories[@]}"; do
+            ContainerRepository=${repositories[index]} dotnet publish ${projects[index]} --configuration Release -t:PublishContainer -p:RuntimeIdentifier=${{ matrix.runtime-identifier }}
+          done
 
       # A native musl binary has to be linked on musl
       - name: Publish Container in Alpine
         if: ${{ matrix.alpine }}
         run: |
-          docker run --rm \
-            --volume "${{ github.workspace }}:/workspace" \
-            --volume "$HOME/.docker:/root/.docker:ro" \
-            --workdir /workspace \
-            --env Version \
-            --env VersionTimestamp \
-            --env ContainerRegistry \
-            --env ContainerRepository \
-            --env ContainerImageTags \
-            mcr.microsoft.com/dotnet/sdk:10.0-alpine \
-            sh -c "apk add --no-cache clang build-base zlib-dev && \
-                   dotnet publish ${{ inputs.project }} \
-                   --configuration Release \
-                   -t:PublishContainer \
-                   -p:RuntimeIdentifier=${{ matrix.runtime-identifier }}"
+          projects=(${{ inputs.projects }})
+          repositories=(${{ inputs.repositories }})
+
+          for index in "${!repositories[@]}"; do
+            docker run --rm \
+              --volume "${{ github.workspace }}:/workspace" \
+              --volume "$HOME/.docker:/root/.docker:ro" \
+              --workdir /workspace \
+              --env Version \
+              --env VersionTimestamp \
+              --env ContainerRegistry \
+              --env ContainerImageTags \
+              --env ContainerRepository=${repositories[index]} \
+              mcr.microsoft.com/dotnet/sdk:10.0-alpine \
+              sh -c "apk add --no-cache clang build-base zlib-dev && \
+                     dotnet publish ${projects[index]} \
+                     --configuration Release \
+                     -t:PublishContainer \
+                     -p:RuntimeIdentifier=${{ matrix.runtime-identifier }}"
+          done
 
   manifest:
     needs: push
@@ -116,16 +128,18 @@ jobs:
       - name: Login to GitHub Container Registry
         run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
-      - name: Create and Push Manifest
-        env:
-          image: ghcr.io/${{ inputs.repository }}
+      - name: Create and Push Manifests
         run: |
-          docker manifest create $image:latest \
-            $image:latest-linux-x64 \
-            $image:latest-linux-arm64 \
-            $image:latest-linux-arm \
-            $image:latest-alpine-x64 \
-            $image:latest-alpine-arm64 \
-            $image:latest-windows
+          for repository in ${{ inputs.repositories }}; do
+            image=ghcr.io/$repository
 
-          docker manifest push $image:latest
+            docker manifest create $image:latest \
+              $image:latest-linux-x64 \
+              $image:latest-linux-arm64 \
+              $image:latest-linux-arm \
+              $image:latest-alpine-x64 \
+              $image:latest-alpine-arm64 \
+              $image:latest-windows
+
+            docker manifest push $image:latest
+          done

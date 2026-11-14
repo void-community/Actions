@@ -76,8 +76,8 @@ jobs:
       dotnet-version: ${{ inputs.dotnet-version }}
       version: ${{ needs.version.outputs.version }}
       timestamp: ${{ needs.version.outputs.timestamp }}
-      project: ${{ inputs.publish }}
-      repository: ${{ inputs.container }}
+      projects: ${{ inputs.publish }}
+      repositories: ${{ inputs.container }}
 
   # The one check to require in branch protection, since the jobs above come and go with the inputs
   required:

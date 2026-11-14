@@ -88,7 +88,11 @@ jobs:
 
       - name: Publish
         if: ${{ !matrix.alpine }}
-        run: dotnet publish ${{ inputs.publish }} --configuration Release --runtime ${{ matrix.runtime-identifier }} --output publish/${{ matrix.runtime-identifier }}
+        shell: bash
+        run: |
+          for project in ${{ inputs.publish }}; do
+            dotnet publish $project --configuration Release --runtime ${{ matrix.runtime-identifier }} --output publish/$(basename $project .csproj)
+          done
 
       # A native musl binary has to be linked on musl
       - name: Publish in Alpine
@@ -100,17 +104,19 @@ jobs:
             --env Version \
             --env VersionTimestamp \
             mcr.microsoft.com/dotnet/sdk:10.0-alpine \
-            sh -c "apk add --no-cache clang build-base zlib-dev && \
-                   dotnet publish ${{ inputs.publish }} \
-                   --configuration Release \
-                   --runtime ${{ matrix.runtime-identifier }} \
-                   --output publish/${{ matrix.runtime-identifier }}"
+            sh -c 'apk add --no-cache clang build-base zlib-dev && \
+                   for project in ${{ inputs.publish }}; do \
+                     dotnet publish $project \
+                     --configuration Release \
+                     --runtime ${{ matrix.runtime-identifier }} \
+                     --output publish/$(basename $project .csproj); \
+                   done'
 
       - name: Upload a Build Artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: publish-${{ matrix.runtime-identifier }}
-          path: publish/${{ matrix.runtime-identifier }}
+          path: publish
           if-no-files-found: error
 
   compress:
@@ -127,8 +133,10 @@ jobs:
         run: |
           mkdir archives
 
-          for directory in artifacts/publish-*; do
-            runtime_identifier=${directory#artifacts/publish-}
+          for directory in artifacts/publish-*/*; do
+            project=$(basename $directory)
+            runtime_identifier=$(basename $(dirname $directory))
+            runtime_identifier=${runtime_identifier#publish-}
 
             filter="--x86"
             if [[ "$runtime_identifier" == *"arm64"* ]]; then
@@ -137,7 +145,7 @@ jobs:
               filter="--arm"
             fi
 
-            env XZ_OPT="$filter -9e -T0" tar -cJf "archives/$runtime_identifier.tar.xz" --exclude='*.pdb' --exclude='*.dbg' --exclude='*.dSYM' -C "$directory" .
+            env XZ_OPT="$filter -9e -T0" tar -cJf "archives/$project-$runtime_identifier.tar.xz" --exclude='*.pdb' --exclude='*.dbg' --exclude='*.dSYM' -C "$directory" .
           done
 
       - name: Upload Compressed Archives

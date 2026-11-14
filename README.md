@@ -35,9 +35,9 @@ jobs:
       version: timestamp
       # Projects packed and pushed to nuget.org, separated by spaces
       pack: src/MyLibrary
-      # Project published as an executable for every runtime
+      # Projects published as executables for every runtime, separated by spaces
       publish: src/MyApp
-      # GHCR repository the published project is pushed to
+      # GHCR repositories the published projects are pushed to, in the same order
       container: my-owner/my-app
 
   # TODO: Remove once nuget.org lets the entrypoint push the packages: https://github.com/NuGet/NuGetGallery/issues/11000
@@ -58,8 +58,8 @@ A pull request builds and tests the solution in the repository root; a repositor
 | `operating-systems` | The runners the tests run on, as a JSON list; Linux, macOS and Windows on x64 and arm64 by default |
 | `check-formatting` | The tests fail when the build rewrote sources, as a build that formats them does; `false` turns that off |
 | `pack` | The projects to pack and push to nuget.org, separated by spaces |
-| `publish` | The project to publish as an executable for every runtime, uploaded on every run |
-| `container` | The GHCR repository to push `publish` to as `latest`, for example `my-owner/my-app` |
+| `publish` | The projects to publish as executables for every runtime, separated by spaces; uploaded on every run |
+| `container` | The GHCR repositories to push the published projects to as `latest`, one for each project of `publish` in the same order, for example `my-owner/my-app` |
 
 What an input asks of the repository:
 
