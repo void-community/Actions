@@ -25,6 +25,10 @@ on:
         type: string
         required: false
         default: ''
+      tag:
+        type: string
+        required: false
+        default: ''
     outputs:
       nuget:
         description: "Packages To Push"
@@ -66,6 +70,16 @@ jobs:
       timestamp: ${{ needs.version.outputs.timestamp }}
       project: ${{ inputs.publish }}
       repository: ${{ inputs.container }}
+
+  tag:
+    needs: [version, build, test]
+    if: ${{ inputs.tag != '' && github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Move Tag
+        run: git push --force origin HEAD:refs/tags/${{ inputs.tag }}
 
   # The one check to require in branch protection, since the jobs above come and go with the inputs
   required:
