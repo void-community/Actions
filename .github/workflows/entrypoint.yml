@@ -25,13 +25,18 @@ on:
         type: string
         required: false
         default: ''
+    secrets:
+      RENOVATE_TOKEN:
+        required: false
     outputs:
       nuget:
         description: "Packages To Push"
         value: ${{ inputs.pack != '' && jobs.version.outputs.release == 'true' }}
 
 jobs:
+  # The schedule is Renovate's; every other event builds, tests and publishes
   version:
+    if: ${{ github.event_name != 'schedule' }}
     uses: $/.github/workflows/dotnet-version.yml
     with:
       version: ${{ inputs.version }}
@@ -72,9 +77,15 @@ jobs:
   # The one check to require in branch protection, since the jobs above come and go with the inputs
   required:
     needs: [version, build, test]
-    if: ${{ always() }}
+    if: ${{ always() && github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check Results
         if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
         run: exit 1
+
+  renovate:
+    if: ${{ github.event_name == 'schedule' }}
+    uses: $/.github/workflows/maintenance-renovate.yml
+    secrets:
+      RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
