@@ -40,6 +40,7 @@ jobs:
       # GHCR repository the published project is pushed to
       container: my-owner/my-app
 
+  # TODO: Remove once nuget.org lets the entrypoint push the packages: https://github.com/NuGet/NuGetGallery/issues/11000
   nuget:
     needs: entrypoint
     if: ${{ needs.entrypoint.outputs.nuget == 'true' }}
