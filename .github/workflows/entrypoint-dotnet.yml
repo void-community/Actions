@@ -51,8 +51,10 @@ jobs:
       pack: ${{ inputs.pack }}
       publish: ${{ inputs.publish }}
 
+  # A repository with nothing to build has nothing to test
   test:
     needs: version
+    if: ${{ needs.version.outputs.solution == 'true' }}
     uses: $/.github/workflows/dotnet-test.yml
     with:
       dotnet-version: ${{ inputs.dotnet-version }}

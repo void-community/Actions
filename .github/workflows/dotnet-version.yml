@@ -16,6 +16,9 @@ on:
       timestamp:
         description: "Generated Version Timestamp"
         value: ${{ jobs.dev.outputs.timestamp }}
+      solution:
+        description: "Solution Found"
+        value: ${{ jobs.dev.outputs.solution }}
       release:
         description: "Release Created"
         value: ${{ jobs.release-please.outputs.release_created == 'true' || (inputs.version == 'timestamp' && inputs.release) }}
@@ -26,8 +29,13 @@ jobs:
     outputs:
       fallback-version: ${{ steps.fallback-version.outputs.result }}
       timestamp: ${{ steps.timestamp.outputs.result }}
+      solution: ${{ steps.solution.outputs.result }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Find solution
+        id: solution
+        run: echo "result=${{ hashFiles('*.sln', '*.slnx', '*.csproj') != '' }}" >> $GITHUB_OUTPUT
 
       - name: Set fallback version
         id: fallback-version
