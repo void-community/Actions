@@ -28,4 +28,4 @@ jobs:
     if: ${{ needs.entrypoint.outputs.nuget == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: void-community/actions/nuget-push@main
+      - uses: void-community/actions/nuget-push@557ba58c1f57ced4539492cb3aea2974c2ba448b # main
