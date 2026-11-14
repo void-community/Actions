@@ -32,14 +32,14 @@ on:
 
 jobs:
   version:
-    uses: $/.github/workflows/reusable-version.yml
+    uses: $/.github/workflows/dotnet-version.yml
     with:
       version: ${{ inputs.version }}
       release: ${{ github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
 
   build:
     needs: version
-    uses: $/.github/workflows/reusable-build.yml
+    uses: $/.github/workflows/dotnet-build.yml
     with:
       dotnet-version: ${{ inputs.dotnet-version }}
       version: ${{ needs.version.outputs.version }}
@@ -49,7 +49,7 @@ jobs:
 
   test:
     needs: version
-    uses: $/.github/workflows/reusable-test.yml
+    uses: $/.github/workflows/dotnet-test.yml
     with:
       dotnet-version: ${{ inputs.dotnet-version }}
       version: ${{ needs.version.outputs.version }}
