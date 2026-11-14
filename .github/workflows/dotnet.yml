@@ -1,0 +1,78 @@
+on:
+  workflow_call:
+    inputs:
+      dotnet-version:
+        type: string
+        required: false
+        default: 'latest'
+      version:
+        type: string
+        required: false
+        default: ''
+      operating-systems:
+        type: string
+        required: false
+        default: '["ubuntu-24.04-arm", "ubuntu-latest", "macos-latest", "macos-15-intel", "windows-11-arm", "windows-latest"]'
+      pack:
+        type: string
+        required: false
+        default: ''
+      publish:
+        type: string
+        required: false
+        default: ''
+      container:
+        type: string
+        required: false
+        default: ''
+    outputs:
+      release:
+        description: "Release Created"
+        value: ${{ jobs.version.outputs.release }}
+
+jobs:
+  version:
+    uses: $/.github/workflows/reusable-version.yml
+    with:
+      version: ${{ inputs.version }}
+      release: ${{ github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
+
+  build:
+    needs: version
+    uses: $/.github/workflows/reusable-build.yml
+    with:
+      dotnet-version: ${{ inputs.dotnet-version }}
+      version: ${{ needs.version.outputs.version }}
+      timestamp: ${{ needs.version.outputs.timestamp }}
+      pack: ${{ inputs.pack }}
+      publish: ${{ inputs.publish }}
+
+  test:
+    needs: version
+    uses: $/.github/workflows/reusable-test.yml
+    with:
+      dotnet-version: ${{ inputs.dotnet-version }}
+      version: ${{ needs.version.outputs.version }}
+      timestamp: ${{ needs.version.outputs.timestamp }}
+      operating-systems: ${{ inputs.operating-systems }}
+
+  docker:
+    needs: [version, build, test]
+    if: ${{ inputs.container != '' && github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
+    uses: $/.github/workflows/publish-docker.yml
+    with:
+      dotnet-version: ${{ inputs.dotnet-version }}
+      version: ${{ needs.version.outputs.version }}
+      timestamp: ${{ needs.version.outputs.timestamp }}
+      project: ${{ inputs.publish }}
+      repository: ${{ inputs.container }}
+
+  # The one check to require in branch protection, since the jobs above come and go with the inputs
+  required:
+    needs: [version, build, test]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Results
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1

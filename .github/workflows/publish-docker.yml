@@ -1,0 +1,131 @@
+on:
+  workflow_call:
+    inputs:
+      dotnet-version:
+        type: string
+        required: false
+        default: 'latest'
+      version:
+        type: string
+        required: false
+        default: ''
+      timestamp:
+        type: string
+        required: false
+        default: ''
+      project:
+        type: string
+        required: true
+      repository:
+        type: string
+        required: true
+
+jobs:
+  push:
+    env:
+      Version: ${{ inputs.version }}
+      VersionTimestamp: ${{ inputs.timestamp }}
+      ContainerRegistry: ghcr.io
+      ContainerRepository: ${{ inputs.repository }}
+      ContainerImageTags: latest-${{ matrix.tag }}
+      ContainerBaseImage: ${{ matrix.base-image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            runtime-identifier: linux-x64
+            tag: linux-x64
+
+          - os: ubuntu-24.04-arm
+            runtime-identifier: linux-arm64
+            tag: linux-arm64
+
+          - os: ubuntu-24.04-arm
+            runtime-identifier: linux-arm
+            tag: linux-arm
+
+          - os: ubuntu-latest
+            runtime-identifier: linux-musl-x64
+            tag: alpine-x64
+            alpine: true
+
+          - os: ubuntu-24.04-arm
+            runtime-identifier: linux-musl-arm64
+            tag: alpine-arm64
+            alpine: true
+
+          - os: windows-latest
+            runtime-identifier: win-x64
+            tag: windows
+            base-image: mcr.microsoft.com/dotnet/runtime:10.0-nanoserver-ltsc2025
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup .NET
+        if: ${{ !matrix.alpine }}
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+          dotnet-quality: ${{ inputs.dotnet-version == 'latest' && 'preview' || '' }}
+
+      - name: Login to GitHub Container Registry
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Install Linux Prerequisites
+        if: ${{ runner.os == 'Linux' && !matrix.alpine }}
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Install ARM Prerequisites
+        if: ${{ matrix.runtime-identifier == 'linux-arm' }}
+        run: |
+          sudo dpkg --add-architecture armhf
+          sudo apt-get update
+          sudo apt-get install -y libc6-dev:armhf libstdc++-13-dev:armhf gcc-arm-linux-gnueabihf
+
+      - name: Publish Container
+        if: ${{ !matrix.alpine }}
+        run: dotnet publish ${{ inputs.project }} --configuration Release -t:PublishContainer -p:RuntimeIdentifier=${{ matrix.runtime-identifier }}
+
+      # A native musl binary has to be linked on musl
+      - name: Publish Container in Alpine
+        if: ${{ matrix.alpine }}
+        run: |
+          docker run --rm \
+            --volume "${{ github.workspace }}:/workspace" \
+            --volume "$HOME/.docker:/root/.docker:ro" \
+            --workdir /workspace \
+            --env Version \
+            --env VersionTimestamp \
+            --env ContainerRegistry \
+            --env ContainerRepository \
+            --env ContainerImageTags \
+            mcr.microsoft.com/dotnet/sdk:10.0-alpine \
+            sh -c "apk add --no-cache clang build-base zlib-dev && \
+                   dotnet publish ${{ inputs.project }} \
+                   --configuration Release \
+                   -t:PublishContainer \
+                   -p:RuntimeIdentifier=${{ matrix.runtime-identifier }}"
+
+  manifest:
+    needs: push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to GitHub Container Registry
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Create and Push Manifest
+        env:
+          image: ghcr.io/${{ inputs.repository }}
+        run: |
+          docker manifest create $image:latest \
+            $image:latest-linux-x64 \
+            $image:latest-linux-arm64 \
+            $image:latest-linux-arm \
+            $image:latest-alpine-x64 \
+            $image:latest-alpine-arm64 \
+            $image:latest-windows
+
+          docker manifest push $image:latest
