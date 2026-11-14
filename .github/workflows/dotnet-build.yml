@@ -130,11 +130,6 @@ jobs:
           for directory in artifacts/publish-*; do
             runtime_identifier=${directory#artifacts/publish-}
 
-            executable=$(basename ${{ inputs.publish }} .csproj)
-            if [[ "$runtime_identifier" == win-* ]]; then
-              executable="$executable.exe"
-            fi
-
             filter="--x86"
             if [[ "$runtime_identifier" == *"arm64"* ]]; then
               filter="--arm64"
@@ -142,7 +137,7 @@ jobs:
               filter="--arm"
             fi
 
-            env XZ_OPT="$filter -9e -T0" tar -cJf "archives/$runtime_identifier.tar.xz" -C "$directory" "$executable"
+            env XZ_OPT="$filter -9e -T0" tar -cJf "archives/$runtime_identifier.tar.xz" --exclude='*.pdb' --exclude='*.dbg' --exclude='*.dSYM' -C "$directory" .
           done
 
       - name: Upload Compressed Archives
