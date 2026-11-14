@@ -56,6 +56,7 @@ A pull request builds and tests the solution in the repository root; a repositor
 | `version` | `release-please` or `timestamp`; without it the build picks its own version |
 | `dotnet-version` | The .NET SDK, `latest` by default |
 | `operating-systems` | The runners the tests run on, as a JSON list; Linux, macOS and Windows on x64 and arm64 by default |
+| `check-formatting` | `true` fails the tests when the build rewrote sources, for a repository whose build formats them |
 | `pack` | The projects to pack and push to nuget.org, separated by spaces |
 | `publish` | The project to publish as an executable for every runtime, uploaded on every run |
 | `container` | The GHCR repository to push `publish` to as `latest`, for example `my-owner/my-app` |

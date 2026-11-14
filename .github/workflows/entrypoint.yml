@@ -13,6 +13,10 @@ on:
         type: string
         required: false
         default: '["ubuntu-24.04-arm", "ubuntu-latest", "macos-latest", "macos-15-intel", "windows-11-arm", "windows-latest"]'
+      check-formatting:
+        type: boolean
+        required: false
+        default: false
       pack:
         type: string
         required: false
@@ -62,6 +66,7 @@ jobs:
       version: ${{ needs.version.outputs.version }}
       timestamp: ${{ needs.version.outputs.timestamp }}
       operating-systems: ${{ inputs.operating-systems }}
+      check-formatting: ${{ inputs.check-formatting }}
 
   docker:
     needs: [version, build, test]

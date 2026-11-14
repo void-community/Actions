@@ -16,6 +16,10 @@ on:
       operating-systems:
         type: string
         required: true
+      check-formatting:
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   tests:
@@ -41,7 +45,7 @@ jobs:
 
       # A build that rewrites sources, as NetAgents does, means the commit was not formatted
       - name: Check formatting
-        if: ${{ runner.os == 'Linux' }}
+        if: ${{ inputs.check-formatting && runner.os == 'Linux' }}
         run: git diff --exit-code
 
       - name: Run tests
