@@ -4,7 +4,7 @@ Shared CI for .NET repositories. A repository adds one workflow file and pins it
 
 ## Workflow
 
-Add `.github/workflows/ci.yml`:
+Copy this file to `.github/workflows/ci.yml` as it is. Set the values under `with` and remove the entries the repository does not use. Keep the `nuget` job even if the repository publishes no packages: it is skipped then.
 
 ```yaml
 name: CI
@@ -15,14 +15,33 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  packages: write
+  pages: write
+  id-token: write
+  contents: write
+  issues: write
+  pull-requests: write
+
 jobs:
   dotnet:
     uses: void-community/actions/.github/workflows/dotnet.yml@v1
     with:
+      # Version scheme: release-please or timestamp
       version: timestamp
+      # Projects packed and pushed to nuget.org, separated by spaces
       pack: src/MyLibrary
+      # Project published as an executable for every runtime
       publish: src/MyApp/MyApp.csproj
+      # GHCR repository the published project is pushed to
       container: my-owner/my-app
+
+  nuget:
+    needs: dotnet
+    if: ${{ needs.dotnet.outputs.nuget == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: void-community/actions/nuget-push@v1
 ```
 
 A pull request builds and tests the solution in the repository root. A push to the default branch also publishes. Every input is optional:
@@ -32,34 +51,17 @@ A pull request builds and tests the solution in the repository root. A push to t
 | `version` | `release-please` or `timestamp`; without it the build picks its own version |
 | `dotnet-version` | The .NET SDK, `latest` by default |
 | `operating-systems` | The runners the tests run on, as a JSON list; Linux, macOS and Windows on x64 and arm64 by default |
-| `pack` | The projects to pack for NuGet, separated by spaces |
+| `pack` | The projects to pack and push to nuget.org, separated by spaces |
 | `publish` | The `.csproj` to publish as an executable for every runtime, uploaded on every run |
 | `container` | The GHCR repository to push `publish` to as `latest`, for example `my-owner/my-app` |
 
 What an input asks of the repository:
 
-- `version: release-please`: keep `.github/RELEASE_PLEASE/config.json` and `manifest.json`, and give the job `contents: write`, `issues: write` and `pull-requests: write`.
+- `version: release-please`: keep `.github/RELEASE_PLEASE/config.json` and `manifest.json`.
 - `version: timestamp`: the build computes its version from the `VersionTimestamp` property.
-- `container`: give the job `packages: write`.
+- `pack`: add a trusted publishing policy on nuget.org that names the repository and `ci.yml`. The packages are pushed when a release is created, or on every push to the default branch with `version: timestamp`.
 
 Require the `dotnet / required` check in branch protection.
-
-## NuGet
-
-Add a job to the same file. It pushes the packages of `pack` when a release is created, or on every push to the default branch with `version: timestamp`:
-
-```yaml
-  nuget:
-    needs: dotnet
-    if: ${{ needs.dotnet.outputs.release == 'true' }}
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-    steps:
-      - uses: void-community/actions/nuget-push@v1
-```
-
-The trusted publishing policy on nuget.org has to name this workflow file, `ci.yml`.
 
 ## Renovate
 
