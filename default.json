@@ -17,7 +17,8 @@
     },
     {
       "matchPackageNames": ["/^void-community\\/actions/i"],
-      "pinDigests": false
+      "matchUpdateTypes": ["pin", "pinDigest"],
+      "enabled": false
     }
   ]
 }
