@@ -1,0 +1,6 @@
+<!-- What this repository's own CI builds: the tests of glibc-sysroot, and a fixture that the pipeline packs and publishes to test itself. -->
+<Solution>
+  <Project Path="tests/fixture/Fixture/Fixture.csproj" />
+  <Project Path="tests/fixture/Fixture.Tests/Fixture.Tests.csproj" />
+  <Project Path="tests/GlibcSysroot.Tests/GlibcSysroot.Tests.csproj" />
+</Solution>
