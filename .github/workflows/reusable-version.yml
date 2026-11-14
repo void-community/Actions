@@ -1,0 +1,61 @@
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: false
+        default: ''
+      release:
+        type: boolean
+        required: false
+        default: false
+    outputs:
+      version:
+        description: "Generated Version"
+        value: ${{ jobs.release-please.outputs.version || jobs.dev.outputs.fallback-version }}
+      timestamp:
+        description: "Generated Version Timestamp"
+        value: ${{ jobs.dev.outputs.timestamp }}
+      release:
+        description: "Release Created"
+        value: ${{ jobs.release-please.outputs.release_created == 'true' || (inputs.version == 'timestamp' && inputs.release) }}
+
+jobs:
+  dev:
+    runs-on: ubuntu-latest
+    outputs:
+      fallback-version: ${{ steps.fallback-version.outputs.result }}
+      timestamp: ${{ steps.timestamp.outputs.result }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set fallback version
+        id: fallback-version
+        if: ${{ inputs.version == 'release-please' }}
+        run: |
+          base=$(jq -r '.["."]' .github/RELEASE_PLEASE/manifest.json)
+          sha=$(git rev-parse --short HEAD)
+          echo "result=${base}+${sha}" >> $GITHUB_OUTPUT
+
+      # Set once, so every job builds the same version from it.
+      - name: Set version timestamp
+        id: timestamp
+        if: ${{ inputs.version == 'timestamp' }}
+        run: echo "result=$(date -u '+%y %m %d %H %M %S')" >> $GITHUB_OUTPUT
+
+  release-please:
+    if: ${{ inputs.version == 'release-please' && inputs.release }}
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Create Release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
+        id: release
+        with:
+          token: ${{ github.token }}
+          config-file: .github/RELEASE_PLEASE/config.json
+          manifest-file: .github/RELEASE_PLEASE/manifest.json

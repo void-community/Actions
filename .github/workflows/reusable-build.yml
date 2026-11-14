@@ -1,0 +1,182 @@
+on:
+  workflow_call:
+    inputs:
+      dotnet-version:
+        type: string
+        required: false
+        default: 'latest'
+      version:
+        type: string
+        required: false
+        default: ''
+      timestamp:
+        type: string
+        required: false
+        default: ''
+      pack:
+        type: string
+        required: false
+        default: ''
+      publish:
+        type: string
+        required: false
+        default: ''
+
+jobs:
+  publish:
+    if: ${{ inputs.publish != '' }}
+    env:
+      Version: ${{ inputs.version }}
+      VersionTimestamp: ${{ inputs.timestamp }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            runtime-identifier: win-x64
+
+          - os: windows-latest
+            runtime-identifier: win-arm64
+
+          - os: windows-latest
+            runtime-identifier: win-x86
+
+          - os: macos-latest
+            runtime-identifier: osx-arm64
+
+          - os: macos-15-intel
+            runtime-identifier: osx-x64
+
+          - os: ubuntu-latest
+            runtime-identifier: linux-x64
+
+          - os: ubuntu-24.04-arm
+            runtime-identifier: linux-arm64
+
+          - os: ubuntu-24.04-arm
+            runtime-identifier: linux-arm
+
+          - os: ubuntu-latest
+            runtime-identifier: linux-musl-x64
+            alpine: true
+
+          - os: ubuntu-24.04-arm
+            runtime-identifier: linux-musl-arm64
+            alpine: true
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup .NET
+        if: ${{ !matrix.alpine }}
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+          dotnet-quality: ${{ inputs.dotnet-version == 'latest' && 'preview' || '' }}
+
+      - name: Install Linux Prerequisites
+        if: ${{ runner.os == 'Linux' && !matrix.alpine }}
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Install ARM Prerequisites
+        if: ${{ matrix.runtime-identifier == 'linux-arm' }}
+        run: |
+          sudo dpkg --add-architecture armhf
+          sudo apt-get update
+          sudo apt-get install -y libc6-dev:armhf libstdc++-13-dev:armhf gcc-arm-linux-gnueabihf
+
+      - name: Publish
+        if: ${{ !matrix.alpine }}
+        run: dotnet publish ${{ inputs.publish }} --configuration Release --runtime ${{ matrix.runtime-identifier }} --output publish/${{ matrix.runtime-identifier }}
+
+      # A native musl binary has to be linked on musl
+      - name: Publish in Alpine
+        if: ${{ matrix.alpine }}
+        run: |
+          docker run --rm \
+            --volume "${{ github.workspace }}:/workspace" \
+            --workdir /workspace \
+            --env Version \
+            --env VersionTimestamp \
+            mcr.microsoft.com/dotnet/sdk:10.0-alpine \
+            sh -c "apk add --no-cache clang build-base zlib-dev && \
+                   dotnet publish ${{ inputs.publish }} \
+                   --configuration Release \
+                   --runtime ${{ matrix.runtime-identifier }} \
+                   --output publish/${{ matrix.runtime-identifier }}"
+
+      - name: Upload a Build Artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: publish-${{ matrix.runtime-identifier }}
+          path: publish/${{ matrix.runtime-identifier }}
+          if-no-files-found: error
+
+  compress:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: publish-*
+          path: artifacts
+
+      - name: Compress Executables
+        run: |
+          mkdir archives
+
+          for directory in artifacts/publish-*; do
+            runtime_identifier=${directory#artifacts/publish-}
+
+            executable=$(basename ${{ inputs.publish }} .csproj)
+            if [[ "$runtime_identifier" == win-* ]]; then
+              executable="$executable.exe"
+            fi
+
+            filter="--x86"
+            if [[ "$runtime_identifier" == *"arm64"* ]]; then
+              filter="--arm64"
+            elif [[ "$runtime_identifier" == *"arm"* ]]; then
+              filter="--arm"
+            fi
+
+            env XZ_OPT="$filter -9e -T0" tar -cJf "archives/$runtime_identifier.tar.xz" -C "$directory" "$executable"
+          done
+
+      - name: Upload Compressed Archives
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: compressed
+          path: archives/*.tar.xz
+          if-no-files-found: error
+
+  pack:
+    if: ${{ inputs.pack != '' }}
+    env:
+      Version: ${{ inputs.version }}
+      VersionTimestamp: ${{ inputs.timestamp }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+          dotnet-quality: ${{ inputs.dotnet-version == 'latest' && 'preview' || '' }}
+
+      - name: Pack
+        run: |
+          for project in ${{ inputs.pack }}; do
+            dotnet pack $project --configuration Release --output artifacts
+          done
+
+      - name: Upload Pack Artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: packages
+          path: artifacts
+          compression-level: 9
+          if-no-files-found: error
