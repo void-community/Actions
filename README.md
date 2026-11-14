@@ -14,6 +14,8 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: "0 * * * *"
 
 permissions:
   packages: write
@@ -25,6 +27,7 @@ permissions:
 
 jobs:
   dotnet:
+    if: ${{ github.event_name != 'schedule' }}
     uses: void-community/actions/.github/workflows/dotnet.yml@v1
     with:
       # Version scheme: release-please or timestamp
@@ -42,9 +45,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: void-community/actions/nuget-push@v1
+
+  renovate:
+    if: ${{ github.event_name == 'schedule' }}
+    uses: void-community/actions/.github/workflows/reusable-renovate.yml@v1
+    secrets:
+      RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
 ```
 
-A pull request builds and tests the solution in the repository root. A push to the default branch also publishes. Every input is optional:
+A pull request builds and tests the solution in the repository root. A push to the default branch also publishes. Renovate runs every hour. Every input is optional:
 
 | Input | |
 |---|---|
@@ -65,7 +74,7 @@ Require the `dotnet / required` check in branch protection.
 
 ## Renovate
 
-Renovate runs from this repository every hour. Add the repository to the list in [`maintenance-renovate.yml`](.github/workflows/maintenance-renovate.yml), then delete its own Renovate workflow and `renovate.json`. Keep a `renovate.json` only for rules of its own.
+The `renovate` job needs a `RENOVATE_TOKEN` secret in the repository or its organization. Delete the repository's own Renovate workflow and `renovate.json`, and keep a `renovate.json` only for rules of its own.
 
 ## glibc-sysroot
 
