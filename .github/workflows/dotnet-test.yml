@@ -19,7 +19,7 @@ on:
       check-formatting:
         type: boolean
         required: false
-        default: false
+        default: true
 
 jobs:
   tests:
