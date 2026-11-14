@@ -78,13 +78,13 @@ The `renovate` job needs a `RENOVATE_TOKEN` secret in the repository or its orga
 
 ## glibc-sysroot
 
-Links a NativeAOT library for Linux against an old glibc instead of the runner's, so that it loads on older distributions:
+Links a NativeAOT library for Linux against an old glibc instead of the runner's, so that it loads on older distributions. Pin it to a commit of `main` and name the branch in the comment, so that Renovate updates the pin and the repository's CI tests each update:
 
 ```yaml
 - name: Prepare the glibc 2.17 sysroot
   id: sysroot
   if: runner.os == 'Linux'
-  uses: void-community/actions/glibc-sysroot@main
+  uses: void-community/actions/glibc-sysroot@<commit-sha> # main
   with:
     rid: ${{ matrix.rid }}   # linux-x64 or linux-arm64
     # glibc: '2.12'          # linux-x64 only
