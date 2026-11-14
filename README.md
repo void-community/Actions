@@ -56,6 +56,7 @@ A pull request builds and tests the solution in the repository root; a repositor
 | `version` | `release-please` or `timestamp`; without it the build picks its own version |
 | `dotnet-version` | The .NET SDK, `latest` by default |
 | `operating-systems` | The runners the tests run on, as a JSON list; Linux, macOS and Windows on x64 and arm64 by default |
+| `shards` | The number of jobs the tests are split into on every runner, 8 by default; 0 runs them in one job |
 | `check-formatting` | The tests fail when the build rewrote sources, as a build that formats them does; `false` turns that off |
 | `pack` | The projects to pack and push to nuget.org, separated by spaces |
 | `publish` | The projects to publish as executables for every runtime, separated by spaces; uploaded on every run |
@@ -66,6 +67,8 @@ What an input asks of the repository:
 - `version: release-please`: keep `.github/RELEASE_PLEASE/config.json` and `manifest.json`.
 - `version: timestamp`: the build computes its version from the `VersionTimestamp` property.
 - `pack`: add a trusted publishing policy on nuget.org that names the repository and `ci.yml`. The packages are pushed when a release is created, or on every push to the default branch with `version: timestamp`.
+
+Tests run with VSTest or Microsoft.Testing.Platform, whichever the test projects use.
 
 Require the `entrypoint / required` check in branch protection.
 

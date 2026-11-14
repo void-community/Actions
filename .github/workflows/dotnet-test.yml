@@ -20,9 +20,60 @@ on:
         type: boolean
         required: false
         default: true
+      shards:
+        type: number
+        required: false
+        default: 8
 
 jobs:
+  # Every test class goes to a shard in turn. Shard 0 runs whatever the other shards do not, so a test that the list misses still runs.
+  shards:
+    if: ${{ inputs.shards > 0 }}
+    env:
+      Version: ${{ inputs.version }}
+      VersionTimestamp: ${{ inputs.timestamp }}
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.result }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+          dotnet-quality: ${{ inputs.dotnet-version == 'latest' && 'preview' || '' }}
+
+      - name: Build
+        run: dotnet build --configuration Release
+
+      # The SDK lists tests for Microsoft.Testing.Platform only when the test projects use it; otherwise VSTest runs them
+      - name: Find test runner
+        shell: bash
+        run: |
+          if DOTNET_TEST_RUNNER=Microsoft.Testing.Platform dotnet test --configuration Release --no-build --list-tests > /dev/null 2>&1; then
+            echo "DOTNET_TEST_RUNNER=Microsoft.Testing.Platform" >> $GITHUB_ENV
+          fi
+
+      - name: List test classes
+        shell: bash
+        run: dotnet test --configuration Release --no-build --list-tests | sed -nE 's/^\s+([A-Za-z_][A-Za-z0-9_.+]*)\.[A-Za-z_][A-Za-z0-9_]*(\(.*)?$/\1/p' | sort -u > classes.txt
+
+      - name: Split test classes
+        id: matrix
+        run: |
+          matrix=$(jq -Rnc --argjson shards ${{ inputs.shards }} '
+            [inputs] | to_entries | map({shard: (.key % $shards), term: "FullyQualifiedName~\(.value)."}) as $terms
+            | [range(1; $shards) as $shard | {index: $shard, filter: ($terms | map(select(.shard == $shard).term) | join("|"))} | select(.filter != "")] as $others
+            | [{index: 0, filter: ($terms | map(select(.shard != 0).term | sub("~"; "!~")) | join("&"))}] + $others
+          ' classes.txt)
+
+          echo "result=$matrix" >> $GITHUB_OUTPUT
+
   tests:
+    needs: shards
+    if: ${{ !failure() && !cancelled() }}
+    name: tests (${{ matrix.os }}, ${{ matrix.shard.index }})
     env:
       Version: ${{ inputs.version }}
       VersionTimestamp: ${{ inputs.timestamp }}
@@ -30,6 +81,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ${{ fromJSON(inputs.operating-systems) }}
+        shard: ${{ fromJSON(needs.shards.outputs.matrix || '[{"index":0,"filter":""}]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -48,5 +100,21 @@ jobs:
         if: ${{ inputs.check-formatting && runner.os == 'Linux' }}
         run: git diff --exit-code
 
+      # The SDK lists tests for Microsoft.Testing.Platform only when the test projects use it; otherwise VSTest runs them
+      - name: Find test runner
+        shell: bash
+        run: |
+          if DOTNET_TEST_RUNNER=Microsoft.Testing.Platform dotnet test --configuration Release --no-build --list-tests > /dev/null 2>&1; then
+            echo "DOTNET_TEST_RUNNER=Microsoft.Testing.Platform" >> $GITHUB_ENV
+          fi
+
       - name: Run tests
+        if: ${{ matrix.shard.filter == '' }}
         run: dotnet test --configuration Release --no-build
+
+      - name: Run shard
+        if: ${{ matrix.shard.filter != '' }}
+        shell: bash
+        env:
+          FILTER: ${{ matrix.shard.filter }}
+        run: dotnet test --configuration Release --no-build --filter "$FILTER"

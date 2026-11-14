@@ -17,6 +17,10 @@ on:
         type: boolean
         required: false
         default: true
+      shards:
+        type: number
+        required: false
+        default: 8
       pack:
         type: string
         required: false
@@ -67,6 +71,7 @@ jobs:
       timestamp: ${{ needs.version.outputs.timestamp }}
       operating-systems: ${{ inputs.operating-systems }}
       check-formatting: ${{ inputs.check-formatting }}
+      shards: ${{ inputs.shards }}
 
   docker:
     needs: [version, build, test]
