@@ -1,6 +1,6 @@
 # Actions
 
-Shared CI for .NET repositories. A repository adds one workflow file and pins it to `v1`, which moves when `main` passes its tests.
+Shared CI for .NET repositories. A repository adds one workflow file, which follows `main` of this repository.
 
 ## Workflow
 
@@ -28,7 +28,7 @@ permissions:
 jobs:
   dotnet:
     if: ${{ github.event_name != 'schedule' }}
-    uses: void-community/actions/.github/workflows/entrypoint-dotnet.yml@v1
+    uses: void-community/actions/.github/workflows/entrypoint-dotnet.yml@main
     with:
       # Version scheme: release-please or timestamp
       version: timestamp
@@ -38,24 +38,22 @@ jobs:
       publish: src/MyApp/MyApp.csproj
       # GHCR repository the published project is pushed to
       container: my-owner/my-app
-      # Tag that follows the default branch once it passes
-      tag: v1
 
   nuget:
     needs: dotnet
     if: ${{ needs.dotnet.outputs.nuget == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: void-community/actions/nuget-push@v1
+      - uses: void-community/actions/nuget-push@main
 
   renovate:
     if: ${{ github.event_name == 'schedule' }}
-    uses: void-community/actions/.github/workflows/entrypoint-renovate.yml@v1
+    uses: void-community/actions/.github/workflows/entrypoint-renovate.yml@main
     secrets:
       RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
 ```
 
-A pull request builds and tests the solution in the repository root. A push to the default branch also publishes. Renovate runs every hour. Every input is optional:
+A pull request builds and tests the solution in the repository root; a repository without one skips that. A push to the default branch also publishes. Renovate runs every hour. Every input is optional:
 
 | Input | |
 |---|---|
@@ -65,7 +63,6 @@ A pull request builds and tests the solution in the repository root. A push to t
 | `pack` | The projects to pack and push to nuget.org, separated by spaces |
 | `publish` | The `.csproj` to publish as an executable for every runtime, uploaded on every run |
 | `container` | The GHCR repository to push `publish` to as `latest`, for example `my-owner/my-app` |
-| `tag` | A tag to move to the commit when the default branch passes, for a repository that others pin to that tag |
 
 What an input asks of the repository:
 
@@ -87,7 +84,7 @@ Links a NativeAOT library for Linux against an old glibc instead of the runner's
 - name: Prepare the glibc 2.17 sysroot
   id: sysroot
   if: runner.os == 'Linux'
-  uses: void-community/actions/glibc-sysroot@v1
+  uses: void-community/actions/glibc-sysroot@main
   with:
     rid: ${{ matrix.rid }}   # linux-x64 or linux-arm64
     # glibc: '2.12'          # linux-x64 only
