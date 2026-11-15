@@ -20,6 +20,14 @@ on:
         type: number
         required: false
         default: 8
+      linux-packages:
+        type: string
+        required: false
+        default: ''
+      packed:
+        type: boolean
+        required: false
+        default: false
       published:
         type: boolean
         required: false
@@ -36,6 +44,13 @@ jobs:
       matrix: ${{ steps.matrix.outputs.result }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Download Pack Artifacts
+        if: ${{ inputs.packed }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: packages
+          path: artifacts/packages
 
       - name: Setup .NET
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
@@ -86,7 +101,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      # What the build published and bundled, for tests that run those very files
+      # What the run packed, published and bundled, for tests that use those very files
+      - name: Download Pack Artifacts
+        if: ${{ inputs.packed }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: packages
+          path: artifacts/packages
+
       - name: Download Build Artifacts
         if: ${{ inputs.published }}
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
@@ -114,6 +136,10 @@ jobs:
           dotnet-version: ${{ inputs.dotnet-version }}
           dotnet-quality: ${{ inputs.dotnet-version == 'latest' && 'preview' || '' }}
           architecture: ${{ matrix.runtime.architecture }}
+
+      - name: Install Linux Prerequisites
+        if: ${{ runner.os == 'Linux' && !matrix.runtime.test-image }}
+        run: sudo apt-get update && sudo apt-get install -y clang lld zlib1g-dev ${{ inputs.linux-packages }}
 
       - name: Build
         if: ${{ !matrix.runtime.test-image }}

@@ -12,6 +12,10 @@ on:
       pack:
         type: string
         required: true
+      linux-packages:
+        type: string
+        required: false
+        default: ''
 
 jobs:
   pack:
@@ -26,6 +30,9 @@ jobs:
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
           dotnet-quality: ${{ inputs.dotnet-version == 'latest' && 'preview' || '' }}
+
+      - name: Install Linux Prerequisites
+        run: sudo apt-get update && sudo apt-get install -y clang lld zlib1g-dev ${{ inputs.linux-packages }}
 
       - name: Pack
         run: |

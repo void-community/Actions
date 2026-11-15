@@ -15,6 +15,14 @@ on:
       runtimes:
         type: string
         required: true
+      linux-packages:
+        type: string
+        required: false
+        default: ''
+      packed:
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   publish:
@@ -29,6 +37,14 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      # What the run packed, for projects that use those very packages
+      - name: Download Pack Artifacts
+        if: ${{ inputs.packed }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: packages
+          path: artifacts/packages
+
       - name: Setup .NET
         if: ${{ !matrix.alpine }}
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
@@ -38,7 +54,7 @@ jobs:
 
       - name: Install Linux Prerequisites
         if: ${{ runner.os == 'Linux' && !matrix.alpine }}
-        run: sudo apt-get update && sudo apt-get install -y clang lld zlib1g-dev
+        run: sudo apt-get update && sudo apt-get install -y clang lld zlib1g-dev ${{ inputs.linux-packages }}
 
       - name: Install ARM Prerequisites
         if: ${{ matrix.runtime-identifier == 'linux-arm' }}
