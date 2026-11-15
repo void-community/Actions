@@ -98,8 +98,10 @@ jobs:
       linux-packages: ${{ inputs.linux-packages }}
       packed: ${{ needs.pack.result == 'success' }}
 
+  # A skipped packing would skip the bundle too, so it says itself when it runs
   bundle:
     needs: [version, build]
+    if: ${{ !failure() && !cancelled() && needs.build.result == 'success' }}
     uses: $/.github/workflows/dotnet-bundle.yml
     with:
       dotnet-version: ${{ inputs.dotnet-version }}
