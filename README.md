@@ -67,7 +67,7 @@ What an input asks of the repository:
 
 - `version: release-please`: keep `.github/RELEASE_PLEASE/config.json` and `manifest.json`.
 - `version: timestamp`: nothing. Every run gets a version from the date and the time of day, such as `26.11.15.1396`.
-- `publish`: nothing. A release run also makes a GitHub release with the files and a table of downloads: every push to the default branch with `version: timestamp`, and each release that release-please creates. The tests run after the build and find its output under `artifacts`, as `publish-<runtime>/<project>`, and the release files in `artifacts/bundle`.
+- `publish`: nothing. A release run also makes a GitHub release with the files and a table of downloads, one for each project when there are several: every push to the default branch with `version: timestamp`, and each release that release-please creates. The tests run after the build and find its output under `artifacts`, as `publish-<runtime>/<project>`, and the release files in `artifacts/bundle`.
 - `bundle`: the target writes the release files to `BundleDirectory` and finds the output of every runtime under `RuntimesDirectory`, as `publish-<runtime>/<project>`.
 - `pack`: add a trusted publishing policy on nuget.org that names the repository and `ci.yml`. The packages are pushed when a release is created, or on every push to the default branch with `version: timestamp`.
 

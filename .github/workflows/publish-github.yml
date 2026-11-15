@@ -22,8 +22,9 @@ jobs:
           name: bundle
           path: bundle
 
-      # One row for each file, under a badge of its platform; a file of no runtime is for any platform and comes first. The padding of the headers
-      # keeps the badges from shrinking on a narrow screen, and the hashes have nowhere to break
+      # One row for each file, under a badge of its platform; a file of no runtime is for any platform and comes first. Files of several projects
+      # get a table for each, under the project's name. The padding of the headers keeps the badges from shrinking on a narrow screen, and the
+      # hashes have nowhere to break
       - name: Write Downloads
         run: |
           paste -d ' ' <(stat --format %s bundle/* | numfmt --to-unit 1048576 --round nearest --format %.2f) <(md5sum bundle/* | cut -d ' ' -f 1) <(sha256sum bundle/*) | jq -Rrn --arg url $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$TAG '
@@ -32,14 +33,20 @@ jobs:
               "osx":   { "label": "macOS",   "color": "24292F", "logo": "logo=apple&logoColor=white&" },
               "win":   { "label": "Windows", "color": "0078D4", "logo": "logo=windows11&logoColor=white&" }
             } as $systems
-            | "## 📦 Downloads", "", "| Platform\("&nbsp;" * 37) | Download\("&nbsp;" * 27) | Hash |", "| :--- | :--- | :--- |",
-              ([inputs | capture("^(?<size>[0-9.]+) (?<md5>[0-9a-f]+) (?<sha256>[0-9a-f]+) +bundle/(?<name>.+)$")
-                | . + { runtime: (.name | capture("(?<system>linux|osx|win)-(?<musl>musl-)?(?<architecture>arm64|arm|x64|x86)") // null) }]
-                | sort_by([.runtime != null, .name])[]
-                | (if .runtime then $systems[.runtime.system] + { message: "\(if .runtime.musl then "MUSL " else "" end)\(.runtime.architecture | ascii_upcase)" }
-                   else { "label": "Any", "message": "Platform", "color": "16A34A", "logo": "" } end) as $badge
-                | "\($url)/\(.name)" as $file
-                | "| [![\($badge.label) \($badge.message)](https://img.shields.io/badge/\($badge.label | ascii_upcase)-\($badge.message | ascii_upcase | @uri)-\($badge.color)?\($badge.logo)style=for-the-badge&labelColor=555555)](\($file)) | [![Download](https://img.shields.io/badge/⬇︎%20GET-\(.size)%20MB-374151?style=for-the-badge&labelColor=2563EB)](\($file)) | <sup><sub>MD5:&nbsp;\(.md5)<br>SHA&#8209;256:&nbsp;\(.sha256)</sub></sup> |")
+            | [inputs | capture("^(?<size>[0-9.]+) (?<md5>[0-9a-f]+) (?<sha256>[0-9a-f]+) +bundle/(?<name>.+)$")
+                | . + { runtime: (.name | capture("^(?<project>.+)-(?<system>linux|osx|win)-(?<musl>musl-)?(?<architecture>arm64|arm|x64|x86)") // null) }
+                | . + { project: (.runtime.project // (.name | sub("\\.[^.]+$"; ""))) }]
+            | group_by(.project) as $projects
+            | "## 📦 Downloads",
+              ($projects[]
+                | "",
+                  (if ($projects | length) > 1 then "### \(.[0].project)", "" else empty end),
+                  "| Platform\("&nbsp;" * 37) | Download\("&nbsp;" * 27) | Hash |", "| :--- | :--- | :--- |",
+                  (sort_by([.runtime != null, .name])[]
+                    | (if .runtime then $systems[.runtime.system] + { message: "\(if .runtime.musl then "MUSL " else "" end)\(.runtime.architecture | ascii_upcase)" }
+                       else { "label": "Any", "message": "Platform", "color": "16A34A", "logo": "" } end) as $badge
+                    | "\($url)/\(.name)" as $file
+                    | "| [![\($badge.label) \($badge.message)](https://img.shields.io/badge/\($badge.label | ascii_upcase)-\($badge.message | ascii_upcase | @uri)-\($badge.color)?\($badge.logo)style=for-the-badge&labelColor=555555)](\($file)) | [![Download](https://img.shields.io/badge/⬇︎%20GET-\(.size)%20MB-374151?style=for-the-badge&labelColor=2563EB)](\($file)) | <sup><sub>MD5:&nbsp;\(.md5)<br>SHA&#8209;256:&nbsp;\(.sha256)</sub></sup> |"))
           ' > downloads.md
 
       # A draft, so that the release only shows once it has its files and its table
