@@ -60,12 +60,15 @@ A pull request builds and tests the solution in the repository root; a repositor
 | `check-formatting` | The tests fail when the build rewrote sources, as a build that formats them does; `false` turns that off |
 | `pack` | The projects to pack and push to nuget.org, separated by spaces |
 | `publish` | The projects to publish as executables for every runtime, separated by spaces; uploaded on every run. The `linux-x64` and `linux-arm64` ones load on glibc 2.17 and later |
+| `bundle` | A target of the published projects that makes the release files from the output of every runtime; without it they are one archive for each project and runtime |
 | `container` | The GHCR repositories to push the published projects to as `latest`, one for each project of `publish` in the same order, for example `my-owner/my-app` |
 
 What an input asks of the repository:
 
 - `version: release-please`: keep `.github/RELEASE_PLEASE/config.json` and `manifest.json`.
 - `version: timestamp`: nothing. Every run gets a version from the date and the time of day, such as `26.11.15.1396`.
+- `publish`: nothing. A release run also makes a GitHub release with the files and a table of downloads: every push to the default branch with `version: timestamp`, and each release that release-please creates.
+- `bundle`: the target writes the release files to `BundleDirectory` and finds the output of every runtime under `RuntimesDirectory`, as `publish-<runtime>/<project>`.
 - `pack`: add a trusted publishing policy on nuget.org that names the repository and `ci.yml`. The packages are pushed when a release is created, or on every push to the default branch with `version: timestamp`.
 
 Tests run with VSTest or Microsoft.Testing.Platform, whichever the test projects use.

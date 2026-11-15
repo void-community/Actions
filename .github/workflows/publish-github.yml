@@ -1,0 +1,57 @@
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+      created:
+        type: boolean
+        required: true
+
+jobs:
+  push:
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ inputs.tag }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: bundle
+          path: bundle
+
+      # One row for each file, under a badge of its platform; a file of no runtime is for any platform and comes first
+      - name: Write Downloads
+        run: |
+          stat --format '%s %n' bundle/* | jq -Rrn --arg url $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$TAG '
+            {
+              "linux":      { "title": "Linux",      "color": "FCC624", "logo": "logo=linux&logoColor=black&" },
+              "linux-musl": { "title": "Linux musl", "color": "FCC624", "logo": "logo=linux&logoColor=black&" },
+              "osx":        { "title": "macOS",      "color": "000000", "logo": "logo=apple&logoColor=white&" },
+              "win":        { "title": "Windows",    "color": "0078D6", "logo": "logo=windows&logoColor=white&" }
+            } as $systems
+            | { "x64": "x64", "x86": "x86", "arm64": "ARM64", "arm": "ARM" } as $architectures
+            | "## 📦 Downloads", "", "| Platform | Download | Size |", "| :--- | :--- | :--- |",
+              ([inputs | capture("^(?<size>[0-9]+) bundle/(?<name>.+)$")
+                | . + { runtime: (.name | capture("(?<system>linux-musl|linux|osx|win)-(?<architecture>arm64|arm|x64|x86)") // null) }]
+                | sort_by([.runtime != null, .name])[]
+                | (if .runtime then $systems[.runtime.system] + { title: "\($systems[.runtime.system].title) \($architectures[.runtime.architecture])" }
+                   else { "title": "Any platform", "color": "6E7781", "logo": "" } end) as $badge
+                | "| [![\($badge.title)](https://img.shields.io/badge/\($badge.title | sub(" "; "-") | gsub(" "; "_"))-\($badge.color)?\($badge.logo)style=for-the-badge)](\($url)/\(.name)) | [\(.name)](\($url)/\(.name)) | \(.size | tonumber / 1048576 * 100 | round / 100) MB |")
+          ' > downloads.md
+
+      # A draft, so that the release only shows once it has its files and its table
+      - name: Create Release
+        if: ${{ !inputs.created }}
+        run: gh release create $TAG --target $GITHUB_SHA --title $TAG --draft --generate-notes
+
+      - name: Upload Release Artifacts
+        run: gh release upload $TAG bundle/*
+
+      - name: Write Release Notes
+        run: |
+          echo >> downloads.md
+          gh release view $TAG --json body --jq .body >> downloads.md
+          gh release edit $TAG --notes-file downloads.md --draft=false --latest
