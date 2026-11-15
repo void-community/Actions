@@ -38,7 +38,7 @@ jobs:
 
       - name: Install Linux Prerequisites
         if: ${{ runner.os == 'Linux' && !matrix.alpine }}
-        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+        run: sudo apt-get update && sudo apt-get install -y clang lld zlib1g-dev
 
       - name: Install ARM Prerequisites
         if: ${{ matrix.runtime-identifier == 'linux-arm' }}
@@ -47,12 +47,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libc6-dev:armhf libstdc++-13-dev:armhf gcc-arm-linux-gnueabihf
 
+      # .NET builds its own Linux binaries in an image with an Ubuntu 18.04 root file system. A native binary linked against it asks for glibc 2.17
+      # at most, not for the runner's, so it also loads on old distributions
+      - name: Copy Sysroot
+        if: ${{ matrix.sysroot }}
+        run: |
+          sudo mkdir /crossrootfs
+          sudo docker cp $(docker create --platform linux/amd64 ${{ matrix.sysroot-image }} /bin/true):${{ matrix.sysroot }} /crossrootfs
+
       - name: Publish
         if: ${{ !matrix.alpine }}
         shell: bash
         run: |
           for project in ${{ inputs.publish }}; do
-            dotnet publish $project --configuration Release --runtime ${{ matrix.runtime-identifier }} --output publish/$(basename $project .csproj)
+            dotnet publish $project --configuration Release --runtime ${{ matrix.runtime-identifier }} --output publish/$(basename $project .csproj) ${{ matrix.sysroot && format('-p:SysRoot={0} -p:LinkerFlavor=lld', matrix.sysroot) || '' }}
           done
 
       # A native musl binary has to be linked on musl

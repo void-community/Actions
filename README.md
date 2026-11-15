@@ -59,7 +59,7 @@ A pull request builds and tests the solution in the repository root; a repositor
 | `shards` | The number of jobs the tests are split into on every runner, 8 by default; 0 runs them in one job |
 | `check-formatting` | The tests fail when the build rewrote sources, as a build that formats them does; `false` turns that off |
 | `pack` | The projects to pack and push to nuget.org, separated by spaces |
-| `publish` | The projects to publish as executables for every runtime, separated by spaces; uploaded on every run |
+| `publish` | The projects to publish as executables for every runtime, separated by spaces; uploaded on every run. The `linux-x64` and `linux-arm64` ones load on glibc 2.17 and later |
 | `container` | The GHCR repositories to push the published projects to as `latest`, one for each project of `publish` in the same order, for example `my-owner/my-app` |
 
 What an input asks of the repository:
