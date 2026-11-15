@@ -13,21 +13,16 @@ on:
         type: string
         required: false
         default: ''
-      pack:
-        type: string
-        required: false
-        default: ''
       publish:
         type: string
-        required: false
-        default: ''
+        required: true
       runtimes:
         type: string
         required: true
 
 jobs:
   publish:
-    if: ${{ inputs.publish != '' && inputs.runtimes != '[]' }}
+    name: publish (${{ matrix.runtime-identifier }})
     env:
       Version: ${{ inputs.version }}
       VersionTimestamp: ${{ inputs.timestamp }}
@@ -124,33 +119,4 @@ jobs:
         with:
           name: compressed
           path: archives/*.tar.xz
-          if-no-files-found: error
-
-  pack:
-    if: ${{ inputs.pack != '' }}
-    env:
-      Version: ${{ inputs.version }}
-      VersionTimestamp: ${{ inputs.timestamp }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
-        with:
-          dotnet-version: ${{ inputs.dotnet-version }}
-          dotnet-quality: ${{ inputs.dotnet-version == 'latest' && 'preview' || '' }}
-
-      - name: Pack
-        run: |
-          for project in ${{ inputs.pack }}; do
-            dotnet pack $project --configuration Release --output artifacts
-          done
-
-      - name: Upload Pack Artifacts
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: packages
-          path: artifacts
-          compression-level: 9
           if-no-files-found: error

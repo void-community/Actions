@@ -1,0 +1,53 @@
+on:
+  workflow_call:
+    inputs:
+      operating-systems:
+        type: string
+        required: true
+    outputs:
+      solution:
+        description: "Solution Found"
+        value: ${{ jobs.matrix.outputs.solution }}
+      runtimes:
+        description: "Runtimes Of The Operating Systems"
+        value: ${{ jobs.matrix.outputs.runtimes }}
+      containers:
+        description: "Runtimes That Have A Container Image"
+        value: ${{ jobs.matrix.outputs.containers }}
+
+jobs:
+  matrix:
+    env:
+      # Every runtime, the runner that builds it and the tag of its container image. The operating systems of a repository pick the rows
+      RUNTIMES: >-
+        [
+          { "os": "windows-latest",   "runtime-identifier": "win-x64",          "tag": "windows", "base-image": "mcr.microsoft.com/dotnet/runtime:10.0-nanoserver-ltsc2025" },
+          { "os": "windows-11-arm",   "runtime-identifier": "win-arm64" },
+          { "os": "windows-latest",   "runtime-identifier": "win-x86" },
+          { "os": "macos-latest",     "runtime-identifier": "osx-arm64" },
+          { "os": "macos-15-intel",   "runtime-identifier": "osx-x64" },
+          { "os": "ubuntu-latest",    "runtime-identifier": "linux-x64",        "tag": "linux-x64" },
+          { "os": "ubuntu-24.04-arm", "runtime-identifier": "linux-arm64",      "tag": "linux-arm64" },
+          { "os": "ubuntu-24.04-arm", "runtime-identifier": "linux-arm",        "tag": "linux-arm" },
+          { "os": "ubuntu-latest",    "runtime-identifier": "linux-musl-x64",   "tag": "alpine-x64",   "alpine": true },
+          { "os": "ubuntu-24.04-arm", "runtime-identifier": "linux-musl-arm64", "tag": "alpine-arm64", "alpine": true }
+        ]
+    runs-on: ubuntu-latest
+    outputs:
+      solution: ${{ steps.solution.outputs.result }}
+      runtimes: ${{ steps.runtimes.outputs.result }}
+      containers: ${{ steps.containers.outputs.result }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Find solution
+        id: solution
+        run: echo "result=${{ hashFiles('*.sln', '*.slnx', '*.csproj') != '' }}" >> $GITHUB_OUTPUT
+
+      - name: Select runtimes
+        id: runtimes
+        run: echo "result=$(jq -c --argjson os '${{ inputs.operating-systems }}' '[.[] | select(.os as $runner | $os | index($runner))]' <<< "$RUNTIMES")" >> $GITHUB_OUTPUT
+
+      - name: Select containers
+        id: containers
+        run: echo "result=$(jq -c '[.[] | select(.tag)]' <<< '${{ steps.runtimes.outputs.result }}')" >> $GITHUB_OUTPUT

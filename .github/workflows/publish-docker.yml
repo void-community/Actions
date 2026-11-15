@@ -25,6 +25,7 @@ on:
 
 jobs:
   push:
+    name: push (${{ matrix.tag }})
     env:
       Version: ${{ inputs.version }}
       VersionTimestamp: ${{ inputs.timestamp }}

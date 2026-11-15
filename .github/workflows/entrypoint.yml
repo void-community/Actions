@@ -39,33 +39,54 @@ on:
     outputs:
       nuget:
         description: "Packages To Push"
-        value: ${{ inputs.pack != '' && jobs.version.outputs.release == 'true' }}
+        value: ${{ jobs.pack.result == 'success' && (jobs.release.outputs.release == 'true' || (inputs.version == 'timestamp' && github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch)) }}
 
 jobs:
   # The schedule is Renovate's; every other event builds, tests and publishes
-  version:
+  matrix:
     if: ${{ github.event_name != 'schedule' }}
+    uses: $/.github/workflows/dotnet-matrix.yml
+    with:
+      operating-systems: ${{ inputs.operating-systems }}
+
+  release:
+    needs: matrix
+    uses: $/.github/workflows/publish-release.yml
+    with:
+      release: ${{ inputs.version == 'release-please' && github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
+
+  version:
+    needs: release
     uses: $/.github/workflows/dotnet-version.yml
     with:
       version: ${{ inputs.version }}
-      release: ${{ github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
-      operating-systems: ${{ inputs.operating-systems }}
+      release-version: ${{ needs.release.outputs.version }}
 
   build:
-    needs: version
+    needs: [matrix, version]
+    if: ${{ inputs.publish != '' && needs.matrix.outputs.runtimes != '[]' }}
     uses: $/.github/workflows/dotnet-build.yml
     with:
       dotnet-version: ${{ inputs.dotnet-version }}
       version: ${{ needs.version.outputs.version }}
       timestamp: ${{ needs.version.outputs.timestamp }}
-      pack: ${{ inputs.pack }}
       publish: ${{ inputs.publish }}
-      runtimes: ${{ needs.version.outputs.runtimes }}
+      runtimes: ${{ needs.matrix.outputs.runtimes }}
+
+  pack:
+    needs: version
+    if: ${{ inputs.pack != '' }}
+    uses: $/.github/workflows/dotnet-pack.yml
+    with:
+      dotnet-version: ${{ inputs.dotnet-version }}
+      version: ${{ needs.version.outputs.version }}
+      timestamp: ${{ needs.version.outputs.timestamp }}
+      pack: ${{ inputs.pack }}
 
   # A repository with nothing to build has nothing to test
   test:
-    needs: version
-    if: ${{ needs.version.outputs.solution == 'true' }}
+    needs: [matrix, version]
+    if: ${{ needs.matrix.outputs.solution == 'true' }}
     uses: $/.github/workflows/dotnet-test.yml
     with:
       dotnet-version: ${{ inputs.dotnet-version }}
@@ -76,8 +97,8 @@ jobs:
       shards: ${{ inputs.shards }}
 
   docker:
-    needs: [version, build, test]
-    if: ${{ inputs.container != '' && needs.version.outputs.containers != '[]' && github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
+    needs: [matrix, version, build, test]
+    if: ${{ inputs.container != '' && needs.matrix.outputs.containers != '[]' && github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
     uses: $/.github/workflows/publish-docker.yml
     with:
       dotnet-version: ${{ inputs.dotnet-version }}
@@ -85,16 +106,16 @@ jobs:
       timestamp: ${{ needs.version.outputs.timestamp }}
       projects: ${{ inputs.publish }}
       repositories: ${{ inputs.container }}
-      runtimes: ${{ needs.version.outputs.containers }}
+      runtimes: ${{ needs.matrix.outputs.containers }}
 
   # The one check to require in branch protection, since the jobs above come and go with the inputs
   required:
-    needs: [version, build, test]
+    needs: [matrix, release, version, build, pack, test]
     if: ${{ always() && github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check Results
-        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || needs.version.result != 'success' }}
         run: exit 1
 
   renovate:
