@@ -33,6 +33,10 @@ on:
         type: string
         required: false
         default: ''
+      release:
+        type: boolean
+        required: false
+        default: true
       linux-packages:
         type: string
         required: false
@@ -133,7 +137,7 @@ jobs:
 
   github:
     needs: [release, version, bundle, test]
-    if: ${{ !failure() && !cancelled() && needs.bundle.result == 'success' && (needs.release.outputs.release == 'true' || (inputs.version == 'timestamp' && github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch)) }}
+    if: ${{ !failure() && !cancelled() && needs.bundle.result == 'success' && inputs.release && (needs.release.outputs.release == 'true' || (inputs.version == 'timestamp' && github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch)) }}
     uses: $/.github/workflows/publish-github.yml
     with:
       tag: ${{ needs.release.outputs.tag || format('v{0}', needs.version.outputs.version) }}

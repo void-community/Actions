@@ -61,6 +61,7 @@ A pull request builds and tests the solution in the repository root; a repositor
 | `pack` | The projects to pack and push to nuget.org, separated by spaces |
 | `publish` | The projects to publish as executables for every runtime, separated by spaces; uploaded on every run. The `linux-x64` and `linux-arm64` ones load on glibc 2.17 and later |
 | `bundle` | A target of the published projects that makes the release files from the output of every runtime; without it they are one archive for each project and runtime |
+| `release` | `false` publishes the projects for the tests only, without a GitHub release |
 | `linux-packages` | More apt packages for the Linux runners, separated by spaces |
 | `container` | The GHCR repositories to push the published projects to as `latest`, one for each project of `publish` in the same order, for example `my-owner/my-app` |
 
