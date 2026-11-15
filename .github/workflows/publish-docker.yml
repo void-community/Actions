@@ -19,6 +19,9 @@ on:
       repositories:
         type: string
         required: true
+      runtimes:
+        type: string
+        required: true
 
 jobs:
   push:
@@ -31,34 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            runtime-identifier: linux-x64
-            tag: linux-x64
-
-          - os: ubuntu-24.04-arm
-            runtime-identifier: linux-arm64
-            tag: linux-arm64
-
-          - os: ubuntu-24.04-arm
-            runtime-identifier: linux-arm
-            tag: linux-arm
-
-          - os: ubuntu-latest
-            runtime-identifier: linux-musl-x64
-            tag: alpine-x64
-            alpine: true
-
-          - os: ubuntu-24.04-arm
-            runtime-identifier: linux-musl-arm64
-            tag: alpine-arm64
-            alpine: true
-
-          - os: windows-latest
-            runtime-identifier: win-x64
-            tag: windows
-            base-image: mcr.microsoft.com/dotnet/runtime:10.0-nanoserver-ltsc2025
-
+        include: ${{ fromJSON(inputs.runtimes) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -129,17 +105,12 @@ jobs:
         run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Create and Push Manifests
+        env:
+          RUNTIMES: ${{ inputs.runtimes }}
         run: |
           for repository in ${{ inputs.repositories }}; do
             image=ghcr.io/$repository
 
-            docker manifest create $image:latest \
-              $image:latest-linux-x64 \
-              $image:latest-linux-arm64 \
-              $image:latest-linux-arm \
-              $image:latest-alpine-x64 \
-              $image:latest-alpine-arm64 \
-              $image:latest-windows
-
+            docker manifest create $image:latest $(jq -r --arg image $image '.[] | "\($image):latest-\(.tag)"' <<< "$RUNTIMES")
             docker manifest push $image:latest
           done
