@@ -12,17 +12,13 @@ on:
     outputs:
       version:
         description: "Generated Version"
-        value: ${{ inputs.release-version || jobs.dev.outputs.fallback-version }}
-      timestamp:
-        description: "Generated Version Timestamp"
-        value: ${{ jobs.dev.outputs.timestamp }}
+        value: ${{ inputs.release-version || jobs.dev.outputs.version }}
 
 jobs:
   dev:
     runs-on: ubuntu-latest
     outputs:
-      fallback-version: ${{ steps.fallback-version.outputs.result }}
-      timestamp: ${{ steps.timestamp.outputs.result }}
+      version: ${{ steps.fallback-version.outputs.result || steps.timestamp-version.outputs.result }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -34,8 +30,10 @@ jobs:
           sha=$(git rev-parse --short HEAD)
           echo "result=${base}+${sha}" >> $GITHUB_OUTPUT
 
-      # Set once, so every job builds the same version from it.
-      - name: Set version timestamp
-        id: timestamp
+      # The date, and the time of day as a number from 1000 to 9999
+      - name: Set timestamp version
+        id: timestamp-version
         if: ${{ inputs.version == 'timestamp' }}
-        run: echo "result=$(date -u '+%y %m %d %H %M %S')" >> $GITHUB_OUTPUT
+        run: |
+          now=$(date -u +%s)
+          echo "result=$(date -u -d @$now '+%y.%-m.%-d').$((1000 + now % 86400 * 9000 / 86400))" >> $GITHUB_OUTPUT

@@ -9,10 +9,6 @@ on:
         type: string
         required: false
         default: ''
-      timestamp:
-        type: string
-        required: false
-        default: ''
       operating-systems:
         type: string
         required: true
@@ -31,7 +27,6 @@ jobs:
     if: ${{ inputs.shards > 0 }}
     env:
       Version: ${{ inputs.version }}
-      VersionTimestamp: ${{ inputs.timestamp }}
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.matrix.outputs.result }}
@@ -76,7 +71,6 @@ jobs:
     name: tests (${{ matrix.os }}, ${{ matrix.shard.index }})
     env:
       Version: ${{ inputs.version }}
-      VersionTimestamp: ${{ inputs.timestamp }}
     strategy:
       fail-fast: false
       matrix:

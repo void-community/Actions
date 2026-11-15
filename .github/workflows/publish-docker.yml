@@ -9,10 +9,6 @@ on:
         type: string
         required: false
         default: ''
-      timestamp:
-        type: string
-        required: false
-        default: ''
       projects:
         type: string
         required: true
@@ -28,7 +24,6 @@ jobs:
     name: push (${{ matrix.tag }})
     env:
       Version: ${{ inputs.version }}
-      VersionTimestamp: ${{ inputs.timestamp }}
       ContainerRegistry: ghcr.io
       ContainerImageTags: latest-${{ matrix.tag }}
       ContainerBaseImage: ${{ matrix.base-image }}
@@ -86,8 +81,7 @@ jobs:
               --volume "$HOME/.docker:/root/.docker:ro" \
               --workdir /workspace \
               --env Version \
-              --env VersionTimestamp \
-              --env ContainerRegistry \
+                --env ContainerRegistry \
               --env ContainerImageTags \
               --env ContainerRepository=${repositories[index]} \
               mcr.microsoft.com/dotnet/sdk:10.0-alpine \

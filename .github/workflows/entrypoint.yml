@@ -69,7 +69,6 @@ jobs:
     with:
       dotnet-version: ${{ inputs.dotnet-version }}
       version: ${{ needs.version.outputs.version }}
-      timestamp: ${{ needs.version.outputs.timestamp }}
       publish: ${{ inputs.publish }}
       runtimes: ${{ needs.matrix.outputs.runtimes }}
 
@@ -80,7 +79,6 @@ jobs:
     with:
       dotnet-version: ${{ inputs.dotnet-version }}
       version: ${{ needs.version.outputs.version }}
-      timestamp: ${{ needs.version.outputs.timestamp }}
       pack: ${{ inputs.pack }}
 
   # A repository with nothing to build has nothing to test
@@ -91,7 +89,6 @@ jobs:
     with:
       dotnet-version: ${{ inputs.dotnet-version }}
       version: ${{ needs.version.outputs.version }}
-      timestamp: ${{ needs.version.outputs.timestamp }}
       operating-systems: ${{ inputs.operating-systems }}
       check-formatting: ${{ inputs.check-formatting }}
       shards: ${{ inputs.shards }}
@@ -103,7 +100,6 @@ jobs:
     with:
       dotnet-version: ${{ inputs.dotnet-version }}
       version: ${{ needs.version.outputs.version }}
-      timestamp: ${{ needs.version.outputs.timestamp }}
       projects: ${{ inputs.publish }}
       repositories: ${{ inputs.container }}
       runtimes: ${{ needs.matrix.outputs.containers }}

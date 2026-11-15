@@ -53,7 +53,7 @@ A pull request builds and tests the solution in the repository root; a repositor
 
 | Input | |
 |---|---|
-| `version` | `release-please` or `timestamp`; without it the build picks its own version |
+| `version` | `release-please` or `timestamp`, given to the build as its `Version`; without it the build picks its own version |
 | `dotnet-version` | The .NET SDK, `latest` by default |
 | `operating-systems` | The runners that test, publish and build the images, as a JSON list; Linux, macOS and Windows on x64 and arm64 by default. A runtime is only published where its runner is in the list |
 | `shards` | The number of jobs the tests are split into on every runner, 8 by default; 0 runs them in one job |
@@ -65,7 +65,7 @@ A pull request builds and tests the solution in the repository root; a repositor
 What an input asks of the repository:
 
 - `version: release-please`: keep `.github/RELEASE_PLEASE/config.json` and `manifest.json`.
-- `version: timestamp`: the build computes its version from the `VersionTimestamp` property.
+- `version: timestamp`: nothing. Every run gets a version from the date and the time of day, such as `26.11.15.1396`.
 - `pack`: add a trusted publishing policy on nuget.org that names the repository and `ci.yml`. The packages are pushed when a release is created, or on every push to the default branch with `version: timestamp`.
 
 Tests run with VSTest or Microsoft.Testing.Platform, whichever the test projects use.
