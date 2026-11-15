@@ -20,6 +20,10 @@ on:
         type: number
         required: false
         default: 8
+      published:
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   # Every test class goes to a shard in turn. Shard 0 runs whatever the other shards do not, so a test that the list misses still runs.
@@ -79,6 +83,27 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # What the build published and bundled, for tests that run those very files
+      - name: Download Build Artifacts
+        if: ${{ inputs.published }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: publish-*
+          path: artifacts
+
+      - name: Download Bundle
+        if: ${{ inputs.published }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: bundle
+          path: artifacts/bundle
+
+      # Artifacts do not preserve file permissions, so the executables get theirs back
+      - name: Restore Permissions
+        if: ${{ inputs.published }}
+        shell: bash
+        run: find artifacts -type f ! -name '*.*' -exec chmod +x {} +
 
       - name: Setup .NET
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
