@@ -103,7 +103,7 @@ jobs:
     with:
       dotnet-version: ${{ inputs.dotnet-version }}
       version: ${{ needs.version.outputs.version }}
-      operating-systems: ${{ inputs.operating-systems }}
+      runtimes: ${{ needs.matrix.outputs.runtimes }}
       check-formatting: ${{ inputs.check-formatting }}
       shards: ${{ inputs.shards }}
       published: ${{ needs.bundle.result == 'success' }}
