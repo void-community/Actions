@@ -49,7 +49,7 @@ jobs:
       - uses: void-community/actions/nuget-push@main
 ```
 
-A pull request builds and tests the solution in the repository root; a repository without one skips that. A push to the default branch also publishes. Renovate runs every hour. Every input is optional:
+A pull request builds and tests the solution in the repository root; a repository without one skips that. A push to the default branch also publishes. Renovate runs every hour, and with a manual run. Every input is optional:
 
 | Input | |
 |---|---|

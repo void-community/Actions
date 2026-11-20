@@ -155,8 +155,9 @@ jobs:
         if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || needs.version.result != 'success' }}
         run: exit 1
 
+  # A manual run doesn't wait for the hour
   renovate:
-    if: ${{ github.event_name == 'schedule' }}
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     uses: $/.github/workflows/maintenance-renovate.yml
     secrets:
       RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
