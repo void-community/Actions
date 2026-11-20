@@ -51,109 +51,61 @@ on:
     outputs:
       nuget:
         description: "Packages To Push"
-        value: ${{ jobs.pack.result == 'success' && (jobs.release.outputs.release == 'true' || (inputs.version == 'timestamp' && github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch)) }}
+        value: ${{ inputs.pack != '' && jobs.version.outputs.release == 'true' }}
 
 jobs:
   # The schedule is Renovate's; every other event builds, tests and publishes
-  matrix:
-    if: ${{ github.event_name != 'schedule' }}
-    uses: $/.github/workflows/dotnet-matrix.yml
-    with:
-      operating-systems: ${{ inputs.operating-systems }}
-
-  release:
-    needs: matrix
-    uses: $/.github/workflows/publish-release.yml
-    with:
-      release: ${{ inputs.version == 'release-please' && github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
-
   version:
-    needs: release
+    if: ${{ github.event_name != 'schedule' }}
     uses: $/.github/workflows/dotnet-version.yml
     with:
       version: ${{ inputs.version }}
-      release-version: ${{ needs.release.outputs.version }}
 
-  pack:
-    needs: version
-    if: ${{ inputs.pack != '' }}
-    uses: $/.github/workflows/dotnet-pack.yml
-    with:
-      dotnet-version: ${{ inputs.dotnet-version }}
-      version: ${{ needs.version.outputs.version }}
-      pack: ${{ inputs.pack }}
-      linux-packages: ${{ inputs.linux-packages }}
-
-  # The build comes after the packing, which a repository that packs nothing skips, and a skipped job would skip the build too, so it says itself
-  # when it runs
   build:
-    needs: [matrix, version, pack]
-    if: ${{ !failure() && !cancelled() && needs.version.result == 'success' && inputs.publish != '' && needs.matrix.outputs.runtimes != '[]' }}
+    needs: version
     uses: $/.github/workflows/dotnet-build.yml
     with:
       dotnet-version: ${{ inputs.dotnet-version }}
       version: ${{ needs.version.outputs.version }}
-      publish: ${{ inputs.publish }}
-      runtimes: ${{ needs.matrix.outputs.runtimes }}
-      linux-packages: ${{ inputs.linux-packages }}
-      packed: ${{ needs.pack.result == 'success' }}
-
-  # A skipped packing would skip the bundle too, so it says itself when it runs
-  bundle:
-    needs: [version, build]
-    if: ${{ !failure() && !cancelled() && needs.build.result == 'success' }}
-    uses: $/.github/workflows/dotnet-bundle.yml
-    with:
-      dotnet-version: ${{ inputs.dotnet-version }}
-      version: ${{ needs.version.outputs.version }}
+      operating-systems: ${{ inputs.operating-systems }}
+      pack: ${{ inputs.pack }}
       publish: ${{ inputs.publish }}
       bundle: ${{ inputs.bundle }}
+      linux-packages: ${{ inputs.linux-packages }}
 
-  # A repository with nothing to build has nothing to test. The tests come after the packing and the build, which a repository that packs or
-  # publishes nothing skips, and a skipped job would skip them too, so they say themselves when they run
+  # A repository without a solution has nothing to test, and nothing is published without the tests
   test:
-    needs: [matrix, version, pack, build, bundle]
-    if: ${{ !failure() && !cancelled() && needs.version.result == 'success' && needs.matrix.outputs.solution == 'true' }}
+    needs: [version, build]
+    if: ${{ needs.build.outputs.solution == 'true' }}
     uses: $/.github/workflows/dotnet-test.yml
     with:
       dotnet-version: ${{ inputs.dotnet-version }}
       version: ${{ needs.version.outputs.version }}
-      runtimes: ${{ needs.matrix.outputs.runtimes }}
+      runtimes: ${{ needs.build.outputs.runtimes }}
       check-formatting: ${{ inputs.check-formatting }}
       shards: ${{ inputs.shards }}
       linux-packages: ${{ inputs.linux-packages }}
-      packed: ${{ needs.pack.result == 'success' }}
-      published: ${{ needs.bundle.result == 'success' }}
+      packed: ${{ inputs.pack != '' }}
+      published: ${{ inputs.publish != '' }}
 
-  # The tests may have been skipped, which would skip what publishes after them too
   docker:
-    needs: [matrix, version, build, test]
-    if: ${{ !failure() && !cancelled() && needs.build.result == 'success' && inputs.container != '' && needs.matrix.outputs.containers != '[]' && github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
+    needs: [version, build, test]
+    if: ${{ inputs.container != '' && github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
     uses: $/.github/workflows/publish-docker.yml
     with:
       dotnet-version: ${{ inputs.dotnet-version }}
       version: ${{ needs.version.outputs.version }}
       projects: ${{ inputs.publish }}
       repositories: ${{ inputs.container }}
-      runtimes: ${{ needs.matrix.outputs.containers }}
+      runtimes: ${{ needs.build.outputs.containers }}
 
   github:
-    needs: [release, version, bundle, test]
-    if: ${{ !failure() && !cancelled() && needs.bundle.result == 'success' && inputs.release && (needs.release.outputs.release == 'true' || (inputs.version == 'timestamp' && github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch)) }}
+    needs: [version, build, test]
+    if: ${{ inputs.publish != '' && inputs.release && needs.version.outputs.release == 'true' }}
     uses: $/.github/workflows/publish-github.yml
     with:
-      tag: ${{ needs.release.outputs.tag || format('v{0}', needs.version.outputs.version) }}
-      created: ${{ needs.release.outputs.release == 'true' }}
-
-  # The one check to require in branch protection, since the jobs above come and go with the inputs
-  required:
-    needs: [matrix, release, version, pack, build, bundle, test]
-    if: ${{ always() && github.event_name != 'schedule' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check Results
-        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || needs.version.result != 'success' }}
-        run: exit 1
+      tag: ${{ needs.version.outputs.tag || format('v{0}', needs.version.outputs.version) }}
+      created: ${{ needs.version.outputs.tag != '' }}
 
   # A manual run doesn't wait for the hour
   renovate:

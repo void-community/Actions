@@ -9,37 +9,123 @@ on:
         type: string
         required: false
         default: ''
+      operating-systems:
+        type: string
+        required: true
+      pack:
+        type: string
+        required: false
+        default: ''
       publish:
         type: string
-        required: true
-      runtimes:
+        required: false
+        default: ''
+      bundle:
         type: string
-        required: true
+        required: false
+        default: ''
       linux-packages:
         type: string
         required: false
         default: ''
-      packed:
-        type: boolean
-        required: false
-        default: false
+    outputs:
+      solution:
+        description: "Solution Found"
+        value: ${{ jobs.matrix.outputs.solution }}
+      runtimes:
+        description: "Runtimes Of The Operating Systems"
+        value: ${{ jobs.matrix.outputs.runtimes }}
+      containers:
+        description: "Runtimes That Have A Container Image"
+        value: ${{ jobs.matrix.outputs.containers }}
 
 jobs:
+  matrix:
+    env:
+      # Every runtime, the runner that builds and tests it, the tag of its container image, the root file system it links against, and the container
+      # its tests run in where no runner runs the runtime itself. The operating systems of a repository pick the rows
+      RUNTIMES: >-
+        [
+          { "os": "windows-latest",   "runtime-identifier": "win-x64",          "tag": "windows", "base-image": "mcr.microsoft.com/dotnet/runtime:10.0-nanoserver-ltsc2025" },
+          { "os": "windows-11-arm",   "runtime-identifier": "win-arm64" },
+          { "os": "windows-latest",   "runtime-identifier": "win-x86",          "architecture": "x86" },
+          { "os": "macos-latest",     "runtime-identifier": "osx-arm64" },
+          { "os": "macos-15-intel",   "runtime-identifier": "osx-x64" },
+          { "os": "ubuntu-latest",    "runtime-identifier": "linux-x64",        "tag": "linux-x64",   "sysroot": "/crossrootfs/x64",   "sysroot-image": "mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64" },
+          { "os": "ubuntu-24.04-arm", "runtime-identifier": "linux-arm64",      "tag": "linux-arm64", "sysroot": "/crossrootfs/arm64", "sysroot-image": "mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64" },
+          { "os": "ubuntu-24.04-arm", "runtime-identifier": "linux-arm",        "tag": "linux-arm",    "test-image": "mcr.microsoft.com/dotnet/sdk:10.0",        "test-platform": "linux/arm/v7", "test-setup": "apt-get update && apt-get install -y clang zlib1g-dev" },
+          { "os": "ubuntu-latest",    "runtime-identifier": "linux-musl-x64",   "tag": "alpine-x64",   "alpine": true, "test-image": "mcr.microsoft.com/dotnet/sdk:10.0-alpine", "test-setup": "apk add --no-cache clang build-base zlib-dev" },
+          { "os": "ubuntu-24.04-arm", "runtime-identifier": "linux-musl-arm64", "tag": "alpine-arm64", "alpine": true, "test-image": "mcr.microsoft.com/dotnet/sdk:10.0-alpine", "test-setup": "apk add --no-cache clang build-base zlib-dev" }
+        ]
+    runs-on: ubuntu-latest
+    outputs:
+      solution: ${{ steps.solution.outputs.result }}
+      runtimes: ${{ steps.runtimes.outputs.result }}
+      containers: ${{ steps.containers.outputs.result }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Find solution
+        id: solution
+        run: echo "result=${{ hashFiles('*.sln', '*.slnx', '*.csproj') != '' }}" >> $GITHUB_OUTPUT
+
+      - name: Select runtimes
+        id: runtimes
+        run: echo "result=$(jq -c --argjson os '${{ inputs.operating-systems }}' '[.[] | select(.os as $runner | $os | index($runner))]' <<< "$RUNTIMES")" >> $GITHUB_OUTPUT
+
+      - name: Select containers
+        id: containers
+        run: echo "result=$(jq -c '[.[] | select(.tag)]' <<< '${{ steps.runtimes.outputs.result }}')" >> $GITHUB_OUTPUT
+
+  # Runs for a repository that packs nothing too, since a skipped job would skip the publishing after it
+  pack:
+    env:
+      Version: ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+          dotnet-quality: ${{ inputs.dotnet-version == 'latest' && 'preview' || '' }}
+
+      - name: Install Linux Prerequisites
+        run: sudo apt-get update && sudo apt-get install -y clang lld zlib1g-dev ${{ inputs.linux-packages }}
+
+      - name: Pack
+        run: |
+          for project in ${{ inputs.pack }}; do
+            dotnet pack $project --configuration Release --output artifacts
+          done
+
+      - name: Upload Pack Artifacts
+        if: ${{ inputs.pack != '' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: packages
+          path: artifacts
+          compression-level: 9
+          if-no-files-found: error
+
   publish:
+    needs: [matrix, pack]
+    if: ${{ inputs.publish != '' }}
     name: publish (${{ matrix.runtime-identifier }})
     env:
       Version: ${{ inputs.version }}
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(inputs.runtimes) }}
+        include: ${{ fromJSON(needs.matrix.outputs.runtimes) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # What the run packed, for projects that use those very packages
       - name: Download Pack Artifacts
-        if: ${{ inputs.packed }}
+        if: ${{ inputs.pack != '' }}
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: packages
@@ -101,4 +187,64 @@ jobs:
         with:
           name: publish-${{ matrix.runtime-identifier }}
           path: publish
+          if-no-files-found: error
+
+  bundle:
+    needs: publish
+    env:
+      Version: ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: publish-*
+          path: artifacts
+
+      # Artifacts do not preserve file permissions, so the executables get theirs back
+      - name: Restore Permissions
+        run: find artifacts -type f ! -name '*.*' -exec chmod +x {} +
+
+      - name: Compress Executables
+        if: ${{ inputs.bundle == '' }}
+        run: |
+          mkdir bundle
+
+          for directory in artifacts/publish-*/*; do
+            project=$(basename $directory)
+            runtime_identifier=$(basename $(dirname $directory))
+            runtime_identifier=${runtime_identifier#publish-}
+
+            filter="--x86"
+            if [[ "$runtime_identifier" == *"arm64"* ]]; then
+              filter="--arm64"
+            elif [[ "$runtime_identifier" == *"arm"* ]]; then
+              filter="--arm"
+            fi
+
+            env XZ_OPT="$filter -9e -T0" tar -cJf "bundle/$project-$runtime_identifier.tar.xz" --exclude='*.pdb' --exclude='*.dbg' --exclude='*.dSYM' -C "$directory" .
+          done
+
+      - name: Setup .NET
+        if: ${{ inputs.bundle != '' }}
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+          dotnet-quality: ${{ inputs.dotnet-version == 'latest' && 'preview' || '' }}
+
+      # A project that names a target makes its own files from the output of every runtime
+      - name: Bundle
+        if: ${{ inputs.bundle != '' }}
+        run: |
+          for project in ${{ inputs.publish }}; do
+            dotnet msbuild $project -restore -target:${{ inputs.bundle }} -property:RuntimesDirectory=$PWD/artifacts -property:BundleDirectory=$PWD/bundle
+          done
+
+      - name: Upload Bundle
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: bundle
+          path: bundle
           if-no-files-found: error
