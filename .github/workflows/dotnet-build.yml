@@ -60,10 +60,21 @@ jobs:
           dotnet-version: ${{ inputs.dotnet-version }}
           dotnet-quality: ${{ inputs.dotnet-version == 'latest' && 'preview' || '' }}
 
-      # The tag of .NET's images for the SDK of the repository: 11.0 for 11.0.100, 12.0-preview for a preview of 12.0
+      # The .NET of the repository's SDK, as its major and minor version
+      - name: Select .NET
+        id: channel
+        run: echo "result=$(cut -d. -f1,2 <<< ${{ steps.dotnet.outputs.dotnet-version }})" >> $GITHUB_OUTPUT
+
+      # The tag of .NET's SDK images of that version, which a preview has under its own
       - name: Select SDK tag
         id: sdk
-        run: echo "result=$(cut -d. -f1,2 <<< ${{ steps.dotnet.outputs.dotnet-version }})${{ contains(steps.dotnet.outputs.dotnet-version, '-') && '-preview' || '' }}" >> $GITHUB_OUTPUT
+        run: echo "result=${{ steps.channel.outputs.result }}${{ contains(steps.dotnet.outputs.dotnet-version, '-') && '-preview' || '' }}" >> $GITHUB_OUTPUT
+
+      # The image .NET builds its own Linux binaries of that version in. Its tag starts with the distribution of the image, which changes over the
+      # years, so the registry is asked for it
+      - name: Find cross image
+        id: cross
+        run: echo "result=$(curl -s https://mcr.microsoft.com/v2/dotnet-buildtools/prereqs/tags/list | jq -r '[.tags[] | select(endswith("-net${{ steps.channel.outputs.result }}-cross-amd64"))] | last | rtrimstr("-amd64")')" >> $GITHUB_OUTPUT
 
       - name: Select runtimes
         id: runtimes
@@ -78,8 +89,8 @@ jobs:
               { "os": "windows-latest",   "runtime-identifier": "win-x86",          "architecture": "x86" },
               { "os": "macos-latest",     "runtime-identifier": "osx-arm64" },
               { "os": "macos-15-intel",   "runtime-identifier": "osx-x64" },
-              { "os": "ubuntu-latest",    "runtime-identifier": "linux-x64",        "tag": "linux-x64",   "sysroot": "/crossrootfs/x64",   "sysroot-image": "mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64" },
-              { "os": "ubuntu-24.04-arm", "runtime-identifier": "linux-arm64",      "tag": "linux-arm64", "sysroot": "/crossrootfs/arm64", "sysroot-image": "mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64" },
+              { "os": "ubuntu-latest",    "runtime-identifier": "linux-x64",        "tag": "linux-x64",   "sysroot": "/crossrootfs/x64",   "sysroot-image": "mcr.microsoft.com/dotnet-buildtools/prereqs:${{ steps.cross.outputs.result }}-amd64" },
+              { "os": "ubuntu-24.04-arm", "runtime-identifier": "linux-arm64",      "tag": "linux-arm64", "sysroot": "/crossrootfs/arm64", "sysroot-image": "mcr.microsoft.com/dotnet-buildtools/prereqs:${{ steps.cross.outputs.result }}-arm64" },
               { "os": "ubuntu-24.04-arm", "runtime-identifier": "linux-arm",        "tag": "linux-arm",    "test-image": "mcr.microsoft.com/dotnet/sdk:${{ steps.sdk.outputs.result }}",        "test-platform": "linux/arm/v7", "test-setup": "apt-get update && apt-get install -y clang zlib1g-dev" },
               { "os": "ubuntu-latest",    "runtime-identifier": "linux-musl-x64",   "tag": "alpine-x64",   "alpine": true, "test-image": "mcr.microsoft.com/dotnet/sdk:${{ steps.sdk.outputs.result }}-alpine", "test-setup": "apk add --no-cache clang build-base zlib-dev" },
               { "os": "ubuntu-24.04-arm", "runtime-identifier": "linux-musl-arm64", "tag": "alpine-arm64", "alpine": true, "test-image": "mcr.microsoft.com/dotnet/sdk:${{ steps.sdk.outputs.result }}-alpine", "test-setup": "apk add --no-cache clang build-base zlib-dev" }
@@ -162,8 +173,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libc6-dev:armhf libstdc++-13-dev:armhf gcc-arm-linux-gnueabihf
 
-      # .NET builds its own Linux binaries in an image with an Ubuntu 18.04 root file system. A native binary linked against it asks for glibc 2.17
-      # at most, not for the runner's, so it also loads on old distributions
+      # .NET builds its own Linux binaries in an image with an old root file system. A native binary linked against it asks for the glibc that .NET
+      # itself asks for, not for the runner's, so it also loads on old distributions
       - name: Copy Sysroot
         if: ${{ matrix.sysroot }}
         run: |

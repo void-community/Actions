@@ -59,7 +59,7 @@ A pull request builds and tests the solution in the repository root. A push to t
 | `shards` | The number of jobs the tests are split into for every runtime, 8 by default; 1 runs them in one job |
 | `check-formatting` | The tests fail when the build rewrote sources, as a build that formats them does; `false` turns that off |
 | `pack` | The projects to pack and push to nuget.org, separated by spaces |
-| `publish` | The projects to publish as executables for every runtime, separated by spaces; uploaded on every run. The `linux-x64` and `linux-arm64` ones load on glibc 2.17 and later |
+| `publish` | The projects to publish as executables for every runtime, separated by spaces; uploaded on every run. The `linux-x64` and `linux-arm64` ones are linked against the root file system that .NET builds its own binaries of that version against, so they load on as old a glibc as .NET does |
 | `bundle` | A target of the published projects that makes the release files from the output of every runtime; without it they are one archive for each project and runtime |
 | `release` | `false` publishes the projects for the tests only, without a GitHub release |
 | `linux-packages` | More apt packages for the Linux runners, separated by spaces |

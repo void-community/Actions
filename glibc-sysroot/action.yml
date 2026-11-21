@@ -33,10 +33,12 @@ runs:
           linux-x64:2.17|linux-x64:2.12)
             arch=x64
             machine=x86_64
+            cross=amd64
             ;;
           linux-arm64:2.17)
             arch=arm64
             machine=aarch64
+            cross=arm64
             ;;
           linux-arm64:*)
             echo "::error::linux-arm64 has no glibc older than 2.17, where glibc's arm64 port starts."
@@ -54,14 +56,12 @@ runs:
         sudo apt-get update -qq
         sudo apt-get install -y -qq clang lld llvm > /dev/null
         if [ "$GLIBC" = 2.17 ]; then
-          # The images are the ones .NET 10 builds its own Linux binaries in; their rootfs is Ubuntu 18.04 with glibc 2.27, and an agent linked
-          # against it needs glibc 2.17 on arm64 and 2.16 on x64. The images only run on x64 hosts, so the rootfs is copied out of a created
-          # container instead of building inside it, which works on arm64 runners too.
-          if [ "$arch" = x64 ]; then
-            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64@sha256:21780f579b6386c3079e3015631c73a1366832033a00720a5c539400f0542e87"
-          else
-            image="mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64@sha256:6d4349c7388e4dfa3178e4ea3db1ad41588ab03fda5f04a664869ca24291d20c"
-          fi
+          # The image is the one .NET builds its own Linux binaries of the installed SDK's version in. Its tag starts with the distribution of the
+          # image, which changes over the years, so the registry is asked for it. Its rootfs has been Ubuntu 18.04 with glibc 2.27, and an agent
+          # linked against it needs glibc 2.17 on arm64 and 2.16 on x64. The images only run on x64 hosts, so the rootfs is copied out of a
+          # created container instead of building inside it, which works on arm64 runners too.
+          suffix="-net$(dotnet --version | cut -d. -f1,2)-cross-$cross"
+          image="mcr.microsoft.com/dotnet-buildtools/prereqs:$(curl -fsSL --retry 5 https://mcr.microsoft.com/v2/dotnet-buildtools/prereqs/tags/list | jq -r --arg suffix "$suffix" '[.tags[] | select(endswith($suffix))] | last')"
           sysroot="/crossrootfs/$arch"
           container="$(docker create --platform linux/amd64 "$image" /bin/true)"
           sudo mkdir -p /crossrootfs
