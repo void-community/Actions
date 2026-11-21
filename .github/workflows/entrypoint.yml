@@ -59,13 +59,14 @@ jobs:
     if: ${{ github.event_name != 'schedule' }}
     uses: $/.github/workflows/dotnet-version.yml
     with:
+      dotnet-version: ${{ inputs.dotnet-version }}
       version: ${{ inputs.version }}
 
   build:
     needs: version
     uses: $/.github/workflows/dotnet-build.yml
     with:
-      dotnet-version: ${{ inputs.dotnet-version }}
+      dotnet-version: ${{ needs.version.outputs.dotnet }}
       version: ${{ needs.version.outputs.version }}
       operating-systems: ${{ inputs.operating-systems }}
       pack: ${{ inputs.pack }}
@@ -79,7 +80,7 @@ jobs:
     if: ${{ needs.build.outputs.solution == 'true' }}
     uses: $/.github/workflows/dotnet-test.yml
     with:
-      dotnet-version: ${{ inputs.dotnet-version }}
+      dotnet-version: ${{ needs.version.outputs.dotnet }}
       version: ${{ needs.version.outputs.version }}
       runtimes: ${{ needs.build.outputs.runtimes }}
       check-formatting: ${{ inputs.check-formatting }}
@@ -93,7 +94,7 @@ jobs:
     if: ${{ inputs.container != '' && github.event_name != 'pull_request' && github.ref_name == github.event.repository.default_branch }}
     uses: $/.github/workflows/publish-docker.yml
     with:
-      dotnet-version: ${{ inputs.dotnet-version }}
+      dotnet-version: ${{ needs.version.outputs.dotnet }}
       version: ${{ needs.version.outputs.version }}
       projects: ${{ inputs.publish }}
       repositories: ${{ inputs.container }}

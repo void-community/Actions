@@ -54,7 +54,7 @@ A pull request builds and tests the solution in the repository root. A push to t
 | Input | |
 |---|---|
 | `version` | `release-please` or `timestamp`, given to the build as its `Version`; without it the build picks its own version |
-| `dotnet-version` | The .NET SDK, `latest` by default. Renovate updates a version pinned here |
+| `dotnet-version` | The .NET SDK. `latest`, the default, is the newest there is, whether that is a preview or a release. Renovate updates a version pinned here |
 | `operating-systems` | The runners that test, publish and build the images, as a JSON list; Linux, macOS and Windows on x64 and arm64 by default. A runtime is only tested and published where its runner is in the list |
 | `shards` | The number of jobs the tests are split into for every runtime, 8 by default; 1 runs them in one job |
 | `check-formatting` | The tests fail when the build rewrote sources, as a build that formats them does; `false` turns that off |

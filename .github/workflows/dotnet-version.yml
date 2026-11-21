@@ -1,11 +1,18 @@
 on:
   workflow_call:
     inputs:
+      dotnet-version:
+        type: string
+        required: false
+        default: 'latest'
       version:
         type: string
         required: false
         default: ''
     outputs:
+      dotnet:
+        description: ".NET SDK"
+        value: ${{ jobs.dev.outputs.dotnet }}
       version:
         description: "Generated Version"
         value: ${{ jobs.release-please.outputs.version || jobs.dev.outputs.version }}
@@ -21,9 +28,16 @@ jobs:
   dev:
     runs-on: ubuntu-latest
     outputs:
+      dotnet: ${{ steps.latest-dotnet.outputs.result || inputs.dotnet-version }}
       version: ${{ steps.fallback-version.outputs.result || steps.timestamp-version.outputs.result }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # The newest .NET there is, whether that is a preview or a release
+      - name: Find latest .NET
+        id: latest-dotnet
+        if: ${{ inputs.dotnet-version == 'latest' }}
+        run: echo "result=$(curl -s https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json | jq -r '.["releases-index"] | max_by(.["channel-version"] | tonumber) | .["latest-sdk"]')" >> $GITHUB_OUTPUT
 
       - name: Set fallback version
         id: fallback-version

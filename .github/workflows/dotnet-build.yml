@@ -58,7 +58,6 @@ jobs:
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
-          dotnet-quality: ${{ inputs.dotnet-version == 'latest' && 'preview' || '' }}
 
       # The .NET of the repository's SDK, as its major and minor version
       - name: Select .NET
@@ -113,7 +112,6 @@ jobs:
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
-          dotnet-quality: ${{ inputs.dotnet-version == 'latest' && 'preview' || '' }}
 
       - name: Install Linux Prerequisites
         run: sudo apt-get update && sudo apt-get install -y clang lld zlib1g-dev ${{ inputs.linux-packages }}
@@ -160,7 +158,6 @@ jobs:
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
-          dotnet-quality: ${{ inputs.dotnet-version == 'latest' && 'preview' || '' }}
 
       - name: Install Linux Prerequisites
         if: ${{ runner.os == 'Linux' && !matrix.alpine }}
@@ -256,7 +253,6 @@ jobs:
         uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           dotnet-version: ${{ inputs.dotnet-version }}
-          dotnet-quality: ${{ inputs.dotnet-version == 'latest' && 'preview' || '' }}
 
       # A project that names a target makes its own files from the output of every runtime
       - name: Bundle
