@@ -26,7 +26,7 @@ jobs:
       Version: ${{ inputs.version }}
       ContainerRegistry: ghcr.io
       ContainerImageTags: latest-${{ matrix.tag }}
-      ContainerBaseImage: ${{ matrix.base-image }}
+      ContainerFamily: ${{ matrix.family }}
     strategy:
       fail-fast: false
       matrix:
@@ -84,7 +84,8 @@ jobs:
                 --env ContainerRegistry \
               --env ContainerImageTags \
               --env ContainerRepository=${repositories[index]} \
-              mcr.microsoft.com/dotnet/sdk:10.0-alpine \
+              --env DOTNET_ROLL_FORWARD=Major \
+              ${{ matrix.test-image }} \
               sh -c "apk add --no-cache clang build-base zlib-dev && \
                      dotnet publish ${projects[index]} \
                      --configuration Release \

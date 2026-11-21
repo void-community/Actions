@@ -41,22 +41,6 @@ on:
 
 jobs:
   matrix:
-    env:
-      # Every runtime, the runner that builds and tests it, the tag of its container image, the root file system it links against, and the container
-      # its tests run in where no runner runs the runtime itself. The operating systems of a repository pick the rows
-      RUNTIMES: >-
-        [
-          { "os": "windows-latest",   "runtime-identifier": "win-x64",          "tag": "windows", "base-image": "mcr.microsoft.com/dotnet/runtime:10.0-nanoserver-ltsc2025" },
-          { "os": "windows-11-arm",   "runtime-identifier": "win-arm64" },
-          { "os": "windows-latest",   "runtime-identifier": "win-x86",          "architecture": "x86" },
-          { "os": "macos-latest",     "runtime-identifier": "osx-arm64" },
-          { "os": "macos-15-intel",   "runtime-identifier": "osx-x64" },
-          { "os": "ubuntu-latest",    "runtime-identifier": "linux-x64",        "tag": "linux-x64",   "sysroot": "/crossrootfs/x64",   "sysroot-image": "mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64" },
-          { "os": "ubuntu-24.04-arm", "runtime-identifier": "linux-arm64",      "tag": "linux-arm64", "sysroot": "/crossrootfs/arm64", "sysroot-image": "mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64" },
-          { "os": "ubuntu-24.04-arm", "runtime-identifier": "linux-arm",        "tag": "linux-arm",    "test-image": "mcr.microsoft.com/dotnet/sdk:10.0",        "test-platform": "linux/arm/v7", "test-setup": "apt-get update && apt-get install -y clang zlib1g-dev" },
-          { "os": "ubuntu-latest",    "runtime-identifier": "linux-musl-x64",   "tag": "alpine-x64",   "alpine": true, "test-image": "mcr.microsoft.com/dotnet/sdk:10.0-alpine", "test-setup": "apk add --no-cache clang build-base zlib-dev" },
-          { "os": "ubuntu-24.04-arm", "runtime-identifier": "linux-musl-arm64", "tag": "alpine-arm64", "alpine": true, "test-image": "mcr.microsoft.com/dotnet/sdk:10.0-alpine", "test-setup": "apk add --no-cache clang build-base zlib-dev" }
-        ]
     runs-on: ubuntu-latest
     outputs:
       solution: ${{ steps.solution.outputs.result }}
@@ -69,8 +53,37 @@ jobs:
         id: solution
         run: echo "result=${{ hashFiles('*.sln', '*.slnx', '*.csproj') != '' }}" >> $GITHUB_OUTPUT
 
+      - name: Setup .NET
+        id: dotnet
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+          dotnet-quality: ${{ inputs.dotnet-version == 'latest' && 'preview' || '' }}
+
+      # The tag of .NET's images for the SDK of the repository: 11.0 for 11.0.100, 12.0-preview for a preview of 12.0
+      - name: Select SDK tag
+        id: sdk
+        run: echo "result=$(cut -d. -f1,2 <<< ${{ steps.dotnet.outputs.dotnet-version }})${{ contains(steps.dotnet.outputs.dotnet-version, '-') && '-preview' || '' }}" >> $GITHUB_OUTPUT
+
       - name: Select runtimes
         id: runtimes
+        env:
+          # Every runtime, the runner that builds and tests it, the tag of its container image and the family of its base image, the root file
+          # system it links against, and the container that builds and tests it where no runner runs the runtime itself. The operating systems
+          # of a repository pick the rows
+          RUNTIMES: >-
+            [
+              { "os": "windows-latest",   "runtime-identifier": "win-x64",          "tag": "windows", "family": "nanoserver-ltsc2025" },
+              { "os": "windows-11-arm",   "runtime-identifier": "win-arm64" },
+              { "os": "windows-latest",   "runtime-identifier": "win-x86",          "architecture": "x86" },
+              { "os": "macos-latest",     "runtime-identifier": "osx-arm64" },
+              { "os": "macos-15-intel",   "runtime-identifier": "osx-x64" },
+              { "os": "ubuntu-latest",    "runtime-identifier": "linux-x64",        "tag": "linux-x64",   "sysroot": "/crossrootfs/x64",   "sysroot-image": "mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-amd64" },
+              { "os": "ubuntu-24.04-arm", "runtime-identifier": "linux-arm64",      "tag": "linux-arm64", "sysroot": "/crossrootfs/arm64", "sysroot-image": "mcr.microsoft.com/dotnet-buildtools/prereqs:azurelinux-3.0-net10.0-cross-arm64" },
+              { "os": "ubuntu-24.04-arm", "runtime-identifier": "linux-arm",        "tag": "linux-arm",    "test-image": "mcr.microsoft.com/dotnet/sdk:${{ steps.sdk.outputs.result }}",        "test-platform": "linux/arm/v7", "test-setup": "apt-get update && apt-get install -y clang zlib1g-dev" },
+              { "os": "ubuntu-latest",    "runtime-identifier": "linux-musl-x64",   "tag": "alpine-x64",   "alpine": true, "test-image": "mcr.microsoft.com/dotnet/sdk:${{ steps.sdk.outputs.result }}-alpine", "test-setup": "apk add --no-cache clang build-base zlib-dev" },
+              { "os": "ubuntu-24.04-arm", "runtime-identifier": "linux-musl-arm64", "tag": "alpine-arm64", "alpine": true, "test-image": "mcr.microsoft.com/dotnet/sdk:${{ steps.sdk.outputs.result }}-alpine", "test-setup": "apk add --no-cache clang build-base zlib-dev" }
+            ]
         run: echo "result=$(jq -c --argjson os '${{ inputs.operating-systems }}' '[.[] | select(.os as $runner | $os | index($runner))]' <<< "$RUNTIMES")" >> $GITHUB_OUTPUT
 
       - name: Select containers
@@ -165,15 +178,15 @@ jobs:
             dotnet publish $project --configuration Release --runtime ${{ matrix.runtime-identifier }} --output publish/$(basename $project .csproj) ${{ matrix.sysroot && format('-p:SysRoot={0} -p:LinkerFlavor=lld', matrix.sysroot) || '' }}
           done
 
-      # A native musl binary has to be linked on musl
+      # A native musl binary has to be linked on musl. The image holds the runtime of its SDK alone, so what targets an older .NET runs on that one
       - name: Publish in Alpine
         if: ${{ matrix.alpine }}
         run: |
           docker run --rm \
             --volume "${{ github.workspace }}:/workspace" \
             --workdir /workspace \
-            --env Version --env CI \
-            mcr.microsoft.com/dotnet/sdk:10.0-alpine \
+            --env Version --env CI --env DOTNET_ROLL_FORWARD=Major \
+            ${{ matrix.test-image }} \
             sh -c 'apk add --no-cache clang build-base zlib-dev && \
                    for project in ${{ inputs.publish }}; do \
                      dotnet publish $project \

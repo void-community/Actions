@@ -166,7 +166,8 @@ jobs:
         shell: bash
         run: dotnet test --configuration Release --no-build --filter "$FILTER"
 
-      # The container builds and tests as the steps above do, with the Docker of the runner for tests that start containers themselves
+      # The container builds and tests as the steps above do, with the Docker of the runner for tests that start containers themselves. The image
+      # holds the runtime of its SDK alone, so tests that target an older .NET run on that one
       - name: Run Tests In Container
         if: ${{ matrix.runtime.test-image }}
         run: |
@@ -174,7 +175,7 @@ jobs:
             --volume "${{ github.workspace }}:/workspace" \
             --volume /var/run/docker.sock:/var/run/docker.sock \
             --workdir /workspace \
-            --env Version --env FILTER --env CI \
+            --env Version --env FILTER --env CI --env DOTNET_ROLL_FORWARD=Major \
             ${{ matrix.runtime.test-image }} \
             sh -c '${{ matrix.runtime.test-setup }} && \
                    dotnet build --configuration Release && \

@@ -73,7 +73,7 @@ What an input asks of the repository:
 - `bundle`: the target writes the release files to `BundleDirectory` and finds the output of every runtime under `RuntimesDirectory`, as `publish-<runtime>/<project>`.
 - `pack`: add a trusted publishing policy on nuget.org that names the repository and `ci.yml`. The packages are pushed when a release is created, or on every push to the default branch with `version: timestamp`. The build and the tests come after the packing and find the packages in `artifacts/packages`.
 
-The tests run once for every runtime: on the runner of the runtime, as x86 on Windows for `win-x86`, and in a container of the runtime for `linux-arm`, `linux-musl-x64` and `linux-musl-arm64`, whose .NET SDK is the image's. They run with VSTest or Microsoft.Testing.Platform, whichever the test projects use.
+The tests run once for every runtime: on the runner of the runtime, as x86 on Windows for `win-x86`, and in a container of the runtime for `linux-arm`, `linux-musl-x64` and `linux-musl-arm64`. The containers are .NET's SDK images of the `dotnet-version`, and the musl runtimes are published in them too. A project that targets an older .NET runs on the image's runtime there. They run with VSTest or Microsoft.Testing.Platform, whichever the test projects use.
 
 ## Renovate
 
